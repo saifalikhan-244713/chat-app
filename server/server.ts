@@ -30,13 +30,18 @@ app.use(
 );
 let users: { userId: string; socketId: string }[] = [];
 
+const mongoUri = process.env.MONGODB_URI;
+
+if (!mongoUri) {
+  throw new Error("MONGODB_URI is not defined in the environment variables.");
+}
+
 mongoose
-  .connect(
-    process.env.MONGODB_URI ||
-      "mongodb+srv://saifkhanali101:UK18b7343@cluster0.lvgws.mongodb.net/chatter?retryWrites=true&w=majority&appName=Cluster0"
-  )
+  .connect(mongoUri)
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err));
+
+const jwtSecret = process.env.JWT_SECRET;
 
 interface IUser {
   _id: mongoose.Types.ObjectId;
@@ -66,7 +71,11 @@ const messageSchema = new mongoose.Schema(
 const Message = mongoose.model("Message", messageSchema);
 
 app.post("/signup", async (req: Request, res: Response) => {
-  const { name, email, password }: { name: string; email: string; password: string } = req.body;
+  const {
+    name,
+    email,
+    password,
+  }: { name: string; email: string; password: string } = req.body;
 
   try {
     const existingUser = await User.findOne({ email });
@@ -98,9 +107,13 @@ app.post("/login", async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    if (!jwtSecret) {
+      throw new Error("JWT_SECRET is not defined");
+    }
+
     const token = jwt.sign(
       { userId: user._id, name: user.name, email: user.email },
-      process.env.JWT_SECRET || "abcd123489ybehbg",
+      jwtSecret,
       { expiresIn: "1h" }
     );
 
@@ -116,23 +129,35 @@ app.get("/home", (req: Request, res: Response) => {
   if (!token) {
     return res.status(403).json({ message: "No token provided" });
   }
-  jwt.verify(
-    token,
-    process.env.JWT_SECRET || "abcd123489ybehbg",
-    async (err, decoded) => {
-      if (err) {
-        return res.status(403).json({ message: "Invalid or expired token" });
-      }
-      const decodedPayload = decoded as { userId: string };
-      const user = await User.findById(decodedPayload.userId).select("name");
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      res
-        .status(200)
-        .json({ message: "Welcome to the home page!", name: user.name });
+
+  // Ensure that JWT_SECRET is defined
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    return res
+      .status(500)
+      .json({ message: "JWT_SECRET not set in environment variables" });
+  }
+
+  jwt.verify(token, jwtSecret, async (err, decoded) => {
+    if (err) {
+      return res.status(403).json({ message: "Invalid or expired token" });
     }
-  );
+
+    const decodedPayload = decoded as { userId: string };
+
+    if (!decodedPayload.userId) {
+      return res.status(400).json({ message: "Invalid token payload" });
+    }
+
+    const user = await User.findById(decodedPayload.userId).select("name");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res
+      .status(200)
+      .json({ message: "Welcome to the home page!", name: user.name });
+  });
 });
 
 app.get("/api/users", async (req: Request, res: Response) => {
@@ -140,15 +165,33 @@ app.get("/api/users", async (req: Request, res: Response) => {
   if (!token) {
     return res.status(403).json({ message: "No token provided" });
   }
+
+  // Ensure that JWT_SECRET is defined
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    return res
+      .status(500)
+      .json({ message: "JWT_SECRET not set in environment variables" });
+  }
+
   try {
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || "abcd123489ybehbg"
-    ) as { userId: string };
-    const usersList = await User.find({ _id: { $ne: decoded.userId } }).select(
-      "_id name"
-    );
-    res.status(200).json(usersList);
+    const decoded = jwt.verify(token, jwtSecret) as unknown;
+
+    // Type narrowing for userId
+    if (
+      typeof decoded === "object" &&
+      decoded !== null &&
+      "userId" in decoded
+    ) {
+      const { userId } = decoded as { userId: string };
+
+      const usersList = await User.find({ _id: { $ne: userId } }).select(
+        "_id name"
+      );
+      res.status(200).json(usersList);
+    } else {
+      return res.status(403).json({ message: "Invalid token payload" });
+    }
   } catch (err) {
     return res.status(403).json({ message: "Invalid or expired token" });
   }
@@ -205,36 +248,49 @@ io.on("connection", (socket: Socket) => {
 });
 
 app.get("/api/messages/:userId", async (req: Request, res: Response) => {
-  const { userId } = req.params;
+  console.log("Fetching messages for user:", req.params.userId);
   const token = req.headers.authorization?.split(" ")[1];
-
   if (!token) {
     return res.status(403).json({ message: "No token provided" });
   }
 
   try {
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || "abcd123489ybehbg"
-    ) as { userId: string };
-
-    const messages = await Message.find({
-      $or: [
-        { from: decoded.userId, to: userId },
-        { from: userId, to: decoded.userId },
-      ],
-    })
-      .populate("from", "name")
-      .populate("to", "name");
-
-    if (!messages.length) {
-      return res.status(404).json({ message: "Messages not found" });
+    if (!jwtSecret) {
+      return res
+        .status(500)
+        .json({ message: "JWT_SECRET not set in environment variables" });
     }
+    const decoded = jwt.verify(token, jwtSecret) as unknown;
+    console.log("Decoded token:", decoded); // Check if the token is being decoded properly
 
-    res.status(200).json(messages);
+    if (
+      typeof decoded === "object" &&
+      decoded !== null &&
+      "userId" in decoded
+    ) {
+      const { userId } = decoded as { userId: string };
+      console.log("Decoded userId:", userId); // Check if the userId is correctly extracted from the token
+
+      const messages = await Message.find({
+        $or: [
+          { from: userId, to: userId },
+          { to: userId, from: userId },
+        ],
+      })
+        .populate("from", "name")
+        .populate("to", "name");
+
+      console.log("Messages sent from server:", messages); // Check if messages are retrieved correctly
+
+      console.log("Messages sent from server:", messages); //not called
+      res.status(200).json(messages);
+    } else {
+      return res.status(403).json({ message: "Invalid token" });
+    }
   } catch (err) {
-    console.error("Error fetching messages:", err);
-    return res.status(403).json({ message: "Invalid or expired token" });
+    return res
+      .status(500)
+      .json({ message: "Error verifying token", error: err });
   }
 });
 

@@ -82,17 +82,16 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
+    console.log("Selected user changed:", selectedUser); //called
     if (selectedUser) {
       const token = localStorage.getItem("token");
       axios
-        .get(
-          `${import.meta.env.VITE_API_URL}/api/messages/${selectedUser._id}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        )
+        .get(`http://localhost:5000/api/messages/${selectedUser._id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
         .then((res) => {
           setMessages(res.data);
+          console.log("Fetched messages:", res.data);
         })
         .catch((err) => console.log("Error fetching messages:", err));
     }

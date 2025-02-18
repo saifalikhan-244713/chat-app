@@ -60,11 +60,15 @@ app.use(cors({
     credentials: true,
 }));
 var users = [];
+var mongoUri = process.env.MONGODB_URI;
+if (!mongoUri) {
+    throw new Error("MONGODB_URI is not defined in the environment variables.");
+}
 mongoose_1.default
-    .connect(process.env.MONGODB_URI ||
-    "mongodb+srv://saifkhanali101:UK18b7343@cluster0.lvgws.mongodb.net/chatter?retryWrites=true&w=majority&appName=Cluster0")
+    .connect(mongoUri)
     .then(function () { return console.log("MongoDB connected"); })
     .catch(function (err) { return console.error("MongoDB connection error:", err); });
+var jwtSecret = process.env.JWT_SECRET;
 var userSchema = new mongoose_1.default.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
@@ -130,7 +134,10 @@ app.post("/login", function (req, res) { return __awaiter(void 0, void 0, void 0
                 if (!isMatch) {
                     return [2 /*return*/, res.status(400).json({ message: "Invalid credentials" })];
                 }
-                token = jwt.sign({ userId: user._id, name: user.name, email: user.email }, process.env.JWT_SECRET || "abcd123489ybehbg", { expiresIn: "1h" });
+                if (!jwtSecret) {
+                    throw new Error("JWT_SECRET is not defined");
+                }
+                token = jwt.sign({ userId: user._id, name: user.name, email: user.email }, jwtSecret, { expiresIn: "1h" });
                 return [2 /*return*/, res.status(200).json({ token: token, name: user.name, userId: user._id })];
             case 4:
                 err_2 = _b.sent();
@@ -146,7 +153,14 @@ app.get("/home", function (req, res) {
     if (!token) {
         return res.status(403).json({ message: "No token provided" });
     }
-    jwt.verify(token, process.env.JWT_SECRET || "abcd123489ybehbg", function (err, decoded) { return __awaiter(void 0, void 0, void 0, function () {
+    // Ensure that JWT_SECRET is defined
+    var jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+        return res
+            .status(500)
+            .json({ message: "JWT_SECRET not set in environment variables" });
+    }
+    jwt.verify(token, jwtSecret, function (err, decoded) { return __awaiter(void 0, void 0, void 0, function () {
         var decodedPayload, user;
         return __generator(this, function (_a) {
             switch (_a.label) {
@@ -155,6 +169,9 @@ app.get("/home", function (req, res) {
                         return [2 /*return*/, res.status(403).json({ message: "Invalid or expired token" })];
                     }
                     decodedPayload = decoded;
+                    if (!decodedPayload.userId) {
+                        return [2 /*return*/, res.status(400).json({ message: "Invalid token payload" })];
+                    }
                     return [4 /*yield*/, User.findById(decodedPayload.userId).select("name")];
                 case 1:
                     user = _a.sent();
@@ -170,7 +187,7 @@ app.get("/home", function (req, res) {
     }); });
 });
 app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var token, decoded, usersList, err_3;
+    var token, jwtSecret, decoded, userId, usersList, err_3;
     var _a;
     return __generator(this, function (_b) {
         switch (_b.label) {
@@ -179,19 +196,31 @@ app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, voi
                 if (!token) {
                     return [2 /*return*/, res.status(403).json({ message: "No token provided" })];
                 }
+                jwtSecret = process.env.JWT_SECRET;
+                if (!jwtSecret) {
+                    return [2 /*return*/, res
+                            .status(500)
+                            .json({ message: "JWT_SECRET not set in environment variables" })];
+                }
                 _b.label = 1;
             case 1:
-                _b.trys.push([1, 3, , 4]);
-                decoded = jwt.verify(token, process.env.JWT_SECRET || "abcd123489ybehbg");
-                return [4 /*yield*/, User.find({ _id: { $ne: decoded.userId } }).select("_id name")];
+                _b.trys.push([1, 5, , 6]);
+                decoded = jwt.verify(token, jwtSecret);
+                if (!(typeof decoded === "object" &&
+                    decoded !== null &&
+                    "userId" in decoded)) return [3 /*break*/, 3];
+                userId = decoded.userId;
+                return [4 /*yield*/, User.find({ _id: { $ne: userId } }).select("_id name")];
             case 2:
                 usersList = _b.sent();
                 res.status(200).json(usersList);
                 return [3 /*break*/, 4];
-            case 3:
+            case 3: return [2 /*return*/, res.status(403).json({ message: "Invalid token payload" })];
+            case 4: return [3 /*break*/, 6];
+            case 5:
                 err_3 = _b.sent();
                 return [2 /*return*/, res.status(403).json({ message: "Invalid or expired token" })];
-            case 4: return [2 /*return*/];
+            case 6: return [2 /*return*/];
         }
     });
 }); });
@@ -258,40 +287,53 @@ io.on("connection", function (socket) {
     });
 });
 app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var userId, token, decoded, messages, err_4;
+    var token, decoded, userId, messages, err_4;
     var _a;
     return __generator(this, function (_b) {
         switch (_b.label) {
             case 0:
-                userId = req.params.userId;
+                console.log("Fetching messages for user:", req.params.userId);
                 token = (_a = req.headers.authorization) === null || _a === void 0 ? void 0 : _a.split(" ")[1];
                 if (!token) {
                     return [2 /*return*/, res.status(403).json({ message: "No token provided" })];
                 }
                 _b.label = 1;
             case 1:
-                _b.trys.push([1, 3, , 4]);
-                decoded = jwt.verify(token, process.env.JWT_SECRET || "abcd123489ybehbg");
+                _b.trys.push([1, 5, , 6]);
+                if (!jwtSecret) {
+                    return [2 /*return*/, res
+                            .status(500)
+                            .json({ message: "JWT_SECRET not set in environment variables" })];
+                }
+                decoded = jwt.verify(token, jwtSecret);
+                console.log("Decoded token:", decoded); // Check if the token is being decoded properly
+                if (!(typeof decoded === "object" &&
+                    decoded !== null &&
+                    "userId" in decoded)) return [3 /*break*/, 3];
+                userId = decoded.userId;
+                console.log("Decoded userId:", userId); // Check if the userId is correctly extracted from the token
                 return [4 /*yield*/, Message.find({
                         $or: [
-                            { from: decoded.userId, to: userId },
-                            { from: userId, to: decoded.userId },
+                            { from: userId, to: userId },
+                            { to: userId, from: userId },
                         ],
                     })
                         .populate("from", "name")
                         .populate("to", "name")];
             case 2:
                 messages = _b.sent();
-                if (!messages.length) {
-                    return [2 /*return*/, res.status(404).json({ message: "Messages not found" })];
-                }
+                console.log("Messages sent from server:", messages); // Check if messages are retrieved correctly
+                console.log("Messages sent from server:", messages); //not called
                 res.status(200).json(messages);
                 return [3 /*break*/, 4];
-            case 3:
+            case 3: return [2 /*return*/, res.status(403).json({ message: "Invalid token" })];
+            case 4: return [3 /*break*/, 6];
+            case 5:
                 err_4 = _b.sent();
-                console.error("Error fetching messages:", err_4);
-                return [2 /*return*/, res.status(403).json({ message: "Invalid or expired token" })];
-            case 4: return [2 /*return*/];
+                return [2 /*return*/, res
+                        .status(500)
+                        .json({ message: "Error verifying token", error: err_4 })];
+            case 6: return [2 /*return*/];
         }
     });
 }); });
