@@ -35,12 +35,11 @@ const Home = () => {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    socketRef.current = io("http://localhost:5000");
+    socketRef.current = io(import.meta.env.VITE_APP_SOCKET_URL as string);
     const token = localStorage.getItem("token");
     socketRef.current.on("connect", () => {
       console.log("Socket connected!");
       setSocketConnected(true);
-      const token = localStorage.getItem("token");
       const userId = localStorage.getItem("userId");
       if (userId) {
         console.log("Registering with userId:", userId);
@@ -54,7 +53,7 @@ const Home = () => {
     });
 
     axios
-      .get("http://localhost:5000/home", {
+      .get(`${import.meta.env.VITE_API_URL}/home`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => {
@@ -64,7 +63,7 @@ const Home = () => {
       .catch((err) => console.log("Error fetching user info:", err));
 
     axios
-      .get("http://localhost:5000/api/users", {
+      .get(`${import.meta.env.VITE_API_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => {
@@ -75,6 +74,7 @@ const Home = () => {
     socketRef.current?.on("receiveMessage", (incomingMessage: ChatMessage) => {
       setMessages((prevMessages) => [...prevMessages, incomingMessage]);
     });
+
     return () => {
       socketRef.current?.disconnect();
       setSocketConnected(false);
@@ -85,9 +85,12 @@ const Home = () => {
     if (selectedUser) {
       const token = localStorage.getItem("token");
       axios
-        .get(`http://localhost:5000/api/messages/${selectedUser._id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        .get(
+          `${import.meta.env.VITE_API_URL}/api/messages/${selectedUser._id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        )
         .then((res) => {
           setMessages(res.data);
         })
@@ -107,27 +110,20 @@ const Home = () => {
         to: selectedUser._id,
         message,
       });
-      console.log(
-        "Sending message with from:",
-        localStorage.getItem("userId"),
-        "and to:",
-        selectedUser._id
-      );
       socketRef.current.emit("sendMessage", {
-        // Correct event name
         from: localStorage.getItem("userId"),
         to: selectedUser._id,
         message,
       });
+
       const fromUser: User = {
-        // Type the fromUser object
         _id: localStorage.getItem("userId") || "",
-        name: name, // Use the name from the component's state
+        name: name,
       };
 
       const tempMessage: ChatMessage = {
         content: message,
-        from: fromUser, // Use the correctly typed fromUser object
+        from: fromUser,
         to: selectedUser,
       };
 
@@ -137,6 +133,7 @@ const Home = () => {
       console.log("Conditions not met for sending message");
     }
   };
+
   const handleSelectUser = (user: User) => {
     setSelectedUser(user);
   };

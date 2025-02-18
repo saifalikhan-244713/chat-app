@@ -48,20 +48,18 @@ var app = require("express")();
 var server = http.createServer(app);
 var io = new socket_io_1.Server(server, {
     cors: {
-        origin: "*", // or specify your frontend URL
+        origin: "*",
         methods: ["GET", "POST"],
     },
 });
 var PORT = process.env.PORT || 5000;
-// Middleware
 app.use(require("express").json());
 app.use(cors({
-    origin: "http://localhost:5173", // Allow your frontend to make requests
+    origin: "http://localhost:5173",
     methods: ["GET", "POST"],
     credentials: true,
 }));
-var users = []; // Store users and their socket IDs
-// MongoDB Connection
+var users = [];
 mongoose_1.default
     .connect(process.env.MONGODB_URI ||
     "mongodb+srv://saifkhanali101:UK18b7343@cluster0.lvgws.mongodb.net/chatter?retryWrites=true&w=majority&appName=Cluster0")
@@ -80,7 +78,6 @@ var messageSchema = new mongoose_1.default.Schema({
     createdAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 var Message = mongoose_1.default.model("Message", messageSchema);
-// Signup Route
 app.post("/signup", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var _a, name, email, password, existingUser, hashedPassword, newUser, err_1;
     return __generator(this, function (_b) {
@@ -112,7 +109,6 @@ app.post("/signup", function (req, res) { return __awaiter(void 0, void 0, void 
         }
     });
 }); });
-// Login Route
 app.post("/login", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var _a, email, password, user, isMatch, token, err_2;
     return __generator(this, function (_b) {
@@ -144,7 +140,6 @@ app.post("/login", function (req, res) { return __awaiter(void 0, void 0, void 0
         }
     });
 }); });
-// Home Route
 app.get("/home", function (req, res) {
     var _a;
     var token = (_a = req.headers.authorization) === null || _a === void 0 ? void 0 : _a.split(" ")[1];
@@ -174,7 +169,6 @@ app.get("/home", function (req, res) {
         });
     }); });
 });
-// Get All Users Route
 app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var token, decoded, usersList, err_3;
     var _a;
@@ -208,8 +202,6 @@ io.on("connection", function (socket) {
         console.log("User ".concat(userId, " joined with socket id ").concat(socket.id));
         users.push({ userId: userId, socketId: socket.id });
     });
-    var socketToUser = {}; // Maps socketId to userId
-    var userToSocket = {}; // Maps userId to socketId
     io.on("connection", function (socket) {
         socket.on("register", function (userId) {
             console.log("User ".concat(userId, " registered with socket id ").concat(socket.id));
@@ -265,7 +257,6 @@ io.on("connection", function (socket) {
         });
     });
 });
-// Get Messages Between Two Users
 app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var userId, token, decoded, messages, err_4;
     var _a;
@@ -294,8 +285,6 @@ app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, 
                 if (!messages.length) {
                     return [2 /*return*/, res.status(404).json({ message: "Messages not found" })];
                 }
-                // Debugging: Check if messages contain populated user names
-                console.log("Fetched messages:", messages);
                 res.status(200).json(messages);
                 return [3 /*break*/, 4];
             case 3:
@@ -306,11 +295,9 @@ app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, 
         }
     });
 }); });
-// Root Route
 app.get("/", function (req, res) {
     res.send("Server is running");
 });
-// Start Server
 server.listen(PORT, function () {
     console.log("Server started on http://localhost:".concat(PORT));
 });

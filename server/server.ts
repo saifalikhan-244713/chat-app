@@ -13,25 +13,23 @@ const app = require("express")();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*", // or specify your frontend URL
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
 
 const PORT = process.env.PORT || 5000;
 
-// Middleware
 app.use(require("express").json());
 app.use(
   cors({
-    origin: "http://localhost:5173", // Allow your frontend to make requests
+    origin: "http://localhost:5173",
     methods: ["GET", "POST"],
     credentials: true,
   })
 );
-let users: { userId: string; socketId: string }[] = []; // Store users and their socket IDs
+let users: { userId: string; socketId: string }[] = [];
 
-// MongoDB Connection
 mongoose
   .connect(
     process.env.MONGODB_URI ||
@@ -40,7 +38,6 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
-// User Schema & Model
 interface IUser {
   _id: mongoose.Types.ObjectId;
   name: string;
@@ -68,13 +65,8 @@ const messageSchema = new mongoose.Schema(
 
 const Message = mongoose.model("Message", messageSchema);
 
-// Signup Route
 app.post("/signup", async (req: Request, res: Response) => {
-  const {
-    name,
-    email,
-    password,
-  }: { name: string; email: string; password: string } = req.body;
+  const { name, email, password }: { name: string; email: string; password: string } = req.body;
 
   try {
     const existingUser = await User.findOne({ email });
@@ -92,7 +84,6 @@ app.post("/signup", async (req: Request, res: Response) => {
   }
 });
 
-// Login Route
 app.post("/login", async (req: Request, res: Response) => {
   const { email, password }: { email: string; password: string } = req.body;
 
@@ -107,7 +98,6 @@ app.post("/login", async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // Generate JWT token with name and include userId in response
     const token = jwt.sign(
       { userId: user._id, name: user.name, email: user.email },
       process.env.JWT_SECRET || "abcd123489ybehbg",
@@ -121,7 +111,6 @@ app.post("/login", async (req: Request, res: Response) => {
   }
 });
 
-// Home Route
 app.get("/home", (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
@@ -146,7 +135,6 @@ app.get("/home", (req: Request, res: Response) => {
   );
 });
 
-// Get All Users Route
 app.get("/api/users", async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
@@ -165,6 +153,7 @@ app.get("/api/users", async (req: Request, res: Response) => {
     return res.status(403).json({ message: "Invalid or expired token" });
   }
 });
+
 const userSocketMap = new Map<string, string>();
 io.on("connection", (socket: Socket) => {
   console.log("User connected, socket id:", socket.id);
@@ -173,8 +162,6 @@ io.on("connection", (socket: Socket) => {
     console.log(`User ${userId} joined with socket id ${socket.id}`);
     users.push({ userId, socketId: socket.id });
   });
-  const socketToUser: { [socketId: string]: string } = {}; // Maps socketId to userId
-  const userToSocket: { [userId: string]: string } = {}; // Maps userId to socketId
 
   io.on("connection", (socket) => {
     socket.on("register", (userId: string) => {
@@ -182,6 +169,7 @@ io.on("connection", (socket: Socket) => {
       userSocketMap.set(userId.toString(), socket.id);
     });
   });
+
   socket.on("sendMessage", async (data) => {
     const { from, to, message } = data;
     try {
@@ -216,7 +204,6 @@ io.on("connection", (socket: Socket) => {
   });
 });
 
-// Get Messages Between Two Users
 app.get("/api/messages/:userId", async (req: Request, res: Response) => {
   const { userId } = req.params;
   const token = req.headers.authorization?.split(" ")[1];
@@ -244,9 +231,6 @@ app.get("/api/messages/:userId", async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Messages not found" });
     }
 
-    // Debugging: Check if messages contain populated user names
-    console.log("Fetched messages:", messages);
-
     res.status(200).json(messages);
   } catch (err) {
     console.error("Error fetching messages:", err);
@@ -254,12 +238,10 @@ app.get("/api/messages/:userId", async (req: Request, res: Response) => {
   }
 });
 
-// Root Route
 app.get("/", (req: Request, res: Response) => {
   res.send("Server is running");
 });
 
-// Start Server
 server.listen(PORT, () => {
   console.log(`Server started on http://localhost:${PORT}`);
 });
