@@ -260,8 +260,9 @@ app.get("/api/messages/:userId", async (req: Request, res: Response) => {
         .status(500)
         .json({ message: "JWT_SECRET not set in environment variables" });
     }
+
     const decoded = jwt.verify(token, jwtSecret) as unknown;
-    console.log("Decoded token:", decoded); // Check if the token is being decoded properly
+    console.log("Decoded token:", decoded);
 
     if (
       typeof decoded === "object" &&
@@ -269,20 +270,18 @@ app.get("/api/messages/:userId", async (req: Request, res: Response) => {
       "userId" in decoded
     ) {
       const { userId } = decoded as { userId: string };
-      console.log("Decoded userId:", userId); // Check if the userId is correctly extracted from the token
+      console.log("Decoded userId:", userId);
 
       const messages = await Message.find({
         $or: [
-          { from: userId, to: userId },
-          { to: userId, from: userId },
+          { from: userId, to: req.params.userId },
+          { to: userId, from: req.params.userId },
         ],
       })
         .populate("from", "name")
         .populate("to", "name");
 
-      console.log("Messages sent from server:", messages); // Check if messages are retrieved correctly
-
-      console.log("Messages sent from server:", messages); //not called
+      console.log("Messages sent from server:", messages);
       res.status(200).json(messages);
     } else {
       return res.status(403).json({ message: "Invalid token" });
