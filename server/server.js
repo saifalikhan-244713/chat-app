@@ -36,85 +36,122 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// });
-var express = require("express");
+var http = require("http");
 var mongoose_1 = require("mongoose");
 var dotenv = require("dotenv");
 var cors = require("cors");
 var bcrypt = require("bcryptjs");
 var jwt = require("jsonwebtoken");
+var socket_io_1 = require("socket.io");
 dotenv.config();
-var app = express();
+var app = require("express")();
+var server = http.createServer(app);
+var io = new socket_io_1.Server(server, {
+    cors: {
+        origin: "*", // or specify your frontend URL
+        methods: ["GET", "POST"],
+    },
+});
 var PORT = process.env.PORT || 5000;
 // Middleware
-app.use(express.json());
-app.use(cors());
+app.use(require("express").json());
+app.use(cors({
+    origin: "http://localhost:5173", // Allow your frontend to make requests
+    methods: ["GET", "POST"],
+    credentials: true,
+}));
+var users = []; // Store users and their socket IDs
 // MongoDB Connection
 mongoose_1.default
-    .connect("mongodb+srv://saifkhanali101:UK18b7343@cluster0.lvgws.mongodb.net/chatter?retryWrites=true&w=majority&appName=Cluster0")
+    .connect(process.env.MONGODB_URI ||
+    "mongodb+srv://saifkhanali101:UK18b7343@cluster0.lvgws.mongodb.net/chatter?retryWrites=true&w=majority&appName=Cluster0")
     .then(function () { return console.log("MongoDB connected"); })
-    .catch(function (err) { return console.log(err); });
+    .catch(function (err) { return console.error("MongoDB connection error:", err); });
 var userSchema = new mongoose_1.default.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
 });
 var User = mongoose_1.default.model("User", userSchema);
+var messageSchema = new mongoose_1.default.Schema({
+    from: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User", required: true },
+    to: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User", required: true },
+    content: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+}, { timestamps: true });
+var Message = mongoose_1.default.model("Message", messageSchema);
 // Signup Route
 app.post("/signup", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var _a, name, email, password, existingUser, hashedPassword, newUser;
+    var _a, name, email, password, existingUser, hashedPassword, newUser, err_1;
     return __generator(this, function (_b) {
         switch (_b.label) {
             case 0:
                 _a = req.body, name = _a.name, email = _a.email, password = _a.password;
-                return [4 /*yield*/, User.findOne({ email: email })];
+                _b.label = 1;
             case 1:
+                _b.trys.push([1, 5, , 6]);
+                return [4 /*yield*/, User.findOne({ email: email })];
+            case 2:
                 existingUser = _b.sent();
                 if (existingUser) {
                     return [2 /*return*/, res.status(400).json({ message: "User already exists" })];
                 }
                 return [4 /*yield*/, bcrypt.hash(password, 10)];
-            case 2:
+            case 3:
                 hashedPassword = _b.sent();
                 newUser = new User({ name: name, email: email, password: hashedPassword });
                 return [4 /*yield*/, newUser.save()];
-            case 3:
+            case 4:
                 _b.sent();
                 return [2 /*return*/, res.status(201).json({ message: "User registered successfully" })];
+            case 5:
+                err_1 = _b.sent();
+                console.error(err_1);
+                return [2 /*return*/, res.status(500).json({ message: "Server error" })];
+            case 6: return [2 /*return*/];
         }
     });
 }); });
-// Login Route (Now includes name in the JWT)
+// Login Route
 app.post("/login", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var _a, email, password, user, isMatch, token;
+    var _a, email, password, user, isMatch, token, err_2;
     return __generator(this, function (_b) {
         switch (_b.label) {
             case 0:
                 _a = req.body, email = _a.email, password = _a.password;
-                return [4 /*yield*/, User.findOne({ email: email })];
+                _b.label = 1;
             case 1:
+                _b.trys.push([1, 4, , 5]);
+                return [4 /*yield*/, User.findOne({ email: email })];
+            case 2:
                 user = _b.sent();
                 if (!user) {
                     return [2 /*return*/, res.status(400).json({ message: "Invalid credentials" })];
                 }
                 return [4 /*yield*/, bcrypt.compare(password, user.password)];
-            case 2:
+            case 3:
                 isMatch = _b.sent();
                 if (!isMatch) {
                     return [2 /*return*/, res.status(400).json({ message: "Invalid credentials" })];
                 }
-                token = jwt.sign({ userId: user._id, name: user.name, email: user.email }, process.env.JWT_SECRET || "secret_key", { expiresIn: "1h" });
-                return [2 /*return*/, res.status(200).json({ token: token, name: user.name })];
+                token = jwt.sign({ userId: user._id, name: user.name, email: user.email }, process.env.JWT_SECRET || "abcd123489ybehbg", { expiresIn: "1h" });
+                return [2 /*return*/, res.status(200).json({ token: token, name: user.name, userId: user._id })];
+            case 4:
+                err_2 = _b.sent();
+                console.error(err_2);
+                return [2 /*return*/, res.status(500).json({ message: "Server error" })];
+            case 5: return [2 /*return*/];
         }
     });
 }); });
+// Home Route
 app.get("/home", function (req, res) {
     var _a;
     var token = (_a = req.headers.authorization) === null || _a === void 0 ? void 0 : _a.split(" ")[1];
     if (!token) {
         return res.status(403).json({ message: "No token provided" });
     }
-    jwt.verify(token, process.env.JWT_SECRET || "your-secret-key", function (err, decoded) { return __awaiter(void 0, void 0, void 0, function () {
+    jwt.verify(token, process.env.JWT_SECRET || "abcd123489ybehbg", function (err, decoded) { return __awaiter(void 0, void 0, void 0, function () {
         var decodedPayload, user;
         return __generator(this, function (_a) {
             switch (_a.label) {
@@ -129,17 +166,17 @@ app.get("/home", function (req, res) {
                     if (!user) {
                         return [2 /*return*/, res.status(404).json({ message: "User not found" })];
                     }
-                    res.status(200).json({
-                        message: "Welcome to the home page!",
-                        name: user.username,
-                    });
+                    res
+                        .status(200)
+                        .json({ message: "Welcome to the home page!", name: user.name });
                     return [2 /*return*/];
             }
         });
     }); });
 });
+// Get All Users Route
 app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var token, decoded, users, err_1;
+    var token, decoded, usersList, err_3;
     var _a;
     return __generator(this, function (_b) {
         switch (_b.label) {
@@ -151,21 +188,104 @@ app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, voi
                 _b.label = 1;
             case 1:
                 _b.trys.push([1, 3, , 4]);
-                decoded = jwt.verify(token, process.env.JWT_SECRET || "secret_key");
+                decoded = jwt.verify(token, process.env.JWT_SECRET || "abcd123489ybehbg");
                 return [4 /*yield*/, User.find({ _id: { $ne: decoded.userId } }).select("_id name")];
             case 2:
-                users = _b.sent();
-                res.status(200).json(users);
+                usersList = _b.sent();
+                res.status(200).json(usersList);
                 return [3 /*break*/, 4];
             case 3:
-                err_1 = _b.sent();
-                res.status(403).json({ message: "Invalid or expired token" });
-                return [3 /*break*/, 4];
+                err_3 = _b.sent();
+                return [2 /*return*/, res.status(403).json({ message: "Invalid or expired token" })];
             case 4: return [2 /*return*/];
         }
     });
 }); });
+// Socket.io for messaging
+io.on("connection", function (socket) {
+    console.log("User connected, socket id:", socket.id);
+    socket.on("join", function (userId) {
+        console.log("User ".concat(userId, " joined with socket id ").concat(socket.id));
+        users.push({ userId: userId, socketId: socket.id });
+    });
+    socket.on("sendMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
+        var from, to, message, newMessage, recipient, error_1;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    from = data.from, to = data.to, message = data.message;
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 3, , 4]);
+                    newMessage = new Message({
+                        from: from,
+                        to: to,
+                        content: message,
+                    });
+                    return [4 /*yield*/, newMessage.save()];
+                case 2:
+                    _a.sent();
+                    console.log("Message saved to database:", newMessage);
+                    recipient = users.find(function (user) { return user.userId === to; });
+                    if (recipient) {
+                        // Emit only after saving the message
+                        io.to(recipient.socketId).emit("receiveMessage", newMessage);
+                    }
+                    else {
+                        console.log("Recipient with ID ".concat(to, " not found"));
+                    }
+                    return [3 /*break*/, 4];
+                case 3:
+                    error_1 = _a.sent();
+                    console.error("Error saving message:", error_1);
+                    return [3 /*break*/, 4];
+                case 4: return [2 /*return*/];
+            }
+        });
+    }); });
+    socket.on("disconnect", function () {
+        console.log("User disconnected, socket id:", socket.id);
+        users = users.filter(function (user) { return user.socketId !== socket.id; });
+    });
+});
+// Get Messages Between Two Users
+app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
+    var userId, token, decoded, messages, err_4;
+    var _a;
+    return __generator(this, function (_b) {
+        switch (_b.label) {
+            case 0:
+                userId = req.params.userId;
+                token = (_a = req.headers.authorization) === null || _a === void 0 ? void 0 : _a.split(" ")[1];
+                if (!token) {
+                    return [2 /*return*/, res.status(403).json({ message: "No token provided" })];
+                }
+                _b.label = 1;
+            case 1:
+                _b.trys.push([1, 3, , 4]);
+                decoded = jwt.verify(token, process.env.JWT_SECRET || "abcd123489ybehbg");
+                return [4 /*yield*/, Message.find({
+                        $or: [
+                            { from: decoded.userId, to: userId },
+                            { from: userId, to: decoded.userId },
+                        ],
+                    }).populate("from to", "name")];
+            case 2:
+                messages = _b.sent();
+                res.status(200).json(messages);
+                return [3 /*break*/, 4];
+            case 3:
+                err_4 = _b.sent();
+                return [2 /*return*/, res.status(403).json({ message: "Invalid or expired token" })];
+            case 4: return [2 /*return*/];
+        }
+    });
+}); });
+// Root Route
+app.get("/", function (req, res) {
+    res.send("Server is running");
+});
 // Start Server
-app.listen(PORT, function () {
+server.listen(PORT, function () {
     console.log("Server started on http://localhost:".concat(PORT));
 });

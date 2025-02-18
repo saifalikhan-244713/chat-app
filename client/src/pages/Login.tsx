@@ -11,13 +11,14 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await axios.post(
-        "http://localhost:5000/login",
-        { email, password }
-      );
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("email", response.data.email);
-      navigate("/home");
+      await axios
+        .post("http://localhost:5000/login", { email, password })
+        .then((res) => {
+          localStorage.setItem("token", res.data.token);
+          localStorage.setItem("userId", res.data.userId); // Store userId
+          navigate("/home");
+        })
+        .catch((err) => console.log("Error logging in:", err));
     } catch (error) {
       console.log(error);
     }
