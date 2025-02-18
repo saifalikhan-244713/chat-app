@@ -20,8 +20,8 @@ interface User {
 interface ChatMessage {
   _id?: string;
   content: string;
-  from: string | User;
-  to: string;
+  from: User;
+  to: User;
 }
 
 const Home = () => {
@@ -75,7 +75,6 @@ const Home = () => {
     socketRef.current?.on("receiveMessage", (incomingMessage: ChatMessage) => {
       setMessages((prevMessages) => [...prevMessages, incomingMessage]);
     });
-
     return () => {
       socketRef.current?.disconnect();
       setSocketConnected(false);
@@ -120,10 +119,19 @@ const Home = () => {
         to: selectedUser._id,
         message,
       });
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        { content: message, from: name, to: selectedUser.name }, // Optimistic update
-      ]);
+      const fromUser: User = {
+        // Type the fromUser object
+        _id: localStorage.getItem("userId") || "",
+        name: name, // Use the name from the component's state
+      };
+
+      const tempMessage: ChatMessage = {
+        content: message,
+        from: fromUser, // Use the correctly typed fromUser object
+        to: selectedUser,
+      };
+
+      setMessages((prevMessages) => [...prevMessages, tempMessage]);
       setMessage("");
     } else {
       console.log("Conditions not met for sending message");
@@ -189,11 +197,7 @@ const Home = () => {
               }}
             >
               {messages.map((msg, index) => {
-                // If msg.from is an object, use its name property; otherwise, assume it's a string.
-                const sender =
-                  typeof msg.from === "object" && msg.from.name
-                    ? msg.from.name
-                    : msg.from;
+                const sender = msg.from?.name ?? "Unknown";
                 return (
                   <Box
                     key={index}

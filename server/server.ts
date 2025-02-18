@@ -182,25 +182,29 @@ io.on("connection", (socket: Socket) => {
       userSocketMap.set(userId.toString(), socket.id);
     });
   });
-
   socket.on("sendMessage", async (data) => {
-    // Correct event name (no typo)
     const { from, to, message } = data;
     try {
       const newMessage = new Message({ from, to, content: message });
       await newMessage.save();
-      console.log("Message saved to database:", newMessage);
+
+      const populatedMessage = await newMessage.save();
+      await populatedMessage.populate("from", "name");
+      await populatedMessage.populate("to", "name");
+
+      console.log("Message saved:", populatedMessage);
 
       const recipientSocketId = userSocketMap.get(to);
       if (recipientSocketId) {
-        io.to(recipientSocketId).emit("receiveMessage", newMessage); // Consistent event name
+        io.to(recipientSocketId).emit("receiveMessage", populatedMessage);
       } else {
-        console.log(`Recipient with ID ${to} not found in map`);
+        console.log(`Recipient ${to} not connected`);
       }
     } catch (error) {
       console.error("Error saving/sending message:", error);
     }
   });
+
   socket.on("disconnect", () => {
     console.log("User disconnected, socket id:", socket.id);
     userSocketMap.forEach((socketId, userId) => {
@@ -216,22 +220,36 @@ io.on("connection", (socket: Socket) => {
 app.get("/api/messages/:userId", async (req: Request, res: Response) => {
   const { userId } = req.params;
   const token = req.headers.authorization?.split(" ")[1];
+
   if (!token) {
     return res.status(403).json({ message: "No token provided" });
   }
+
   try {
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET || "abcd123489ybehbg"
     ) as { userId: string };
+
     const messages = await Message.find({
       $or: [
         { from: decoded.userId, to: userId },
         { from: userId, to: decoded.userId },
       ],
-    }).populate("from to", "name");
+    })
+      .populate("from", "name")
+      .populate("to", "name");
+
+    if (!messages.length) {
+      return res.status(404).json({ message: "Messages not found" });
+    }
+
+    // Debugging: Check if messages contain populated user names
+    console.log("Fetched messages:", messages);
+
     res.status(200).json(messages);
   } catch (err) {
+    console.error("Error fetching messages:", err);
     return res.status(403).json({ message: "Invalid or expired token" });
   }
 });

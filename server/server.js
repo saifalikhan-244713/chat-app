@@ -217,32 +217,41 @@ io.on("connection", function (socket) {
         });
     });
     socket.on("sendMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
-        var from, to, message, newMessage, recipientSocketId, error_1;
+        var from, to, message, newMessage, populatedMessage, recipientSocketId, error_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
                     from = data.from, to = data.to, message = data.message;
                     _a.label = 1;
                 case 1:
-                    _a.trys.push([1, 3, , 4]);
+                    _a.trys.push([1, 6, , 7]);
                     newMessage = new Message({ from: from, to: to, content: message });
                     return [4 /*yield*/, newMessage.save()];
                 case 2:
                     _a.sent();
-                    console.log("Message saved to database:", newMessage);
+                    return [4 /*yield*/, newMessage.save()];
+                case 3:
+                    populatedMessage = _a.sent();
+                    return [4 /*yield*/, populatedMessage.populate("from", "name")];
+                case 4:
+                    _a.sent();
+                    return [4 /*yield*/, populatedMessage.populate("to", "name")];
+                case 5:
+                    _a.sent();
+                    console.log("Message saved:", populatedMessage);
                     recipientSocketId = userSocketMap.get(to);
                     if (recipientSocketId) {
-                        io.to(recipientSocketId).emit("receiveMessage", newMessage); // Consistent event name
+                        io.to(recipientSocketId).emit("receiveMessage", populatedMessage);
                     }
                     else {
-                        console.log("Recipient with ID ".concat(to, " not found in map"));
+                        console.log("Recipient ".concat(to, " not connected"));
                     }
-                    return [3 /*break*/, 4];
-                case 3:
+                    return [3 /*break*/, 7];
+                case 6:
                     error_1 = _a.sent();
                     console.error("Error saving/sending message:", error_1);
-                    return [3 /*break*/, 4];
-                case 4: return [2 /*return*/];
+                    return [3 /*break*/, 7];
+                case 7: return [2 /*return*/];
             }
         });
     }); });
@@ -277,13 +286,21 @@ app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, 
                             { from: decoded.userId, to: userId },
                             { from: userId, to: decoded.userId },
                         ],
-                    }).populate("from to", "name")];
+                    })
+                        .populate("from", "name")
+                        .populate("to", "name")];
             case 2:
                 messages = _b.sent();
+                if (!messages.length) {
+                    return [2 /*return*/, res.status(404).json({ message: "Messages not found" })];
+                }
+                // Debugging: Check if messages contain populated user names
+                console.log("Fetched messages:", messages);
                 res.status(200).json(messages);
                 return [3 /*break*/, 4];
             case 3:
                 err_4 = _b.sent();
+                console.error("Error fetching messages:", err_4);
                 return [2 /*return*/, res.status(403).json({ message: "Invalid or expired token" })];
             case 4: return [2 /*return*/];
         }
