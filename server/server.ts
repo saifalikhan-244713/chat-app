@@ -165,8 +165,7 @@ app.get("/api/users", async (req: Request, res: Response) => {
     return res.status(403).json({ message: "Invalid or expired token" });
   }
 });
-
-// Socket.io for messaging
+const userSocketMap = new Map<string, string>();
 io.on("connection", (socket: Socket) => {
   console.log("User connected, socket id:", socket.id);
 
@@ -174,33 +173,42 @@ io.on("connection", (socket: Socket) => {
     console.log(`User ${userId} joined with socket id ${socket.id}`);
     users.push({ userId, socketId: socket.id });
   });
+  const socketToUser: { [socketId: string]: string } = {}; // Maps socketId to userId
+  const userToSocket: { [userId: string]: string } = {}; // Maps userId to socketId
+
+  io.on("connection", (socket) => {
+    socket.on("register", (userId: string) => {
+      console.log(`User ${userId} registered with socket id ${socket.id}`);
+      userSocketMap.set(userId.toString(), socket.id);
+    });
+  });
 
   socket.on("sendMessage", async (data) => {
+    // Correct event name (no typo)
     const { from, to, message } = data;
     try {
-      const newMessage = new Message({
-        from,
-        to,
-        content: message,
-      });
+      const newMessage = new Message({ from, to, content: message });
       await newMessage.save();
       console.log("Message saved to database:", newMessage);
 
-      const recipient = users.find((user) => user.userId === to);
-      if (recipient) {
-        // Emit only after saving the message
-        io.to(recipient.socketId).emit("receiveMessage", newMessage);
+      const recipientSocketId = userSocketMap.get(to);
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit("receiveMessage", newMessage); // Consistent event name
       } else {
-        console.log(`Recipient with ID ${to} not found`);
+        console.log(`Recipient with ID ${to} not found in map`);
       }
     } catch (error) {
-      console.error("Error saving message:", error);
+      console.error("Error saving/sending message:", error);
     }
   });
-
   socket.on("disconnect", () => {
     console.log("User disconnected, socket id:", socket.id);
-    users = users.filter((user) => user.socketId !== socket.id);
+    userSocketMap.forEach((socketId, userId) => {
+      if (socketId === socket.id) {
+        userSocketMap.delete(userId);
+        return;
+      }
+    });
   });
 });
 

@@ -201,15 +201,23 @@ app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, voi
         }
     });
 }); });
-// Socket.io for messaging
+var userSocketMap = new Map();
 io.on("connection", function (socket) {
     console.log("User connected, socket id:", socket.id);
     socket.on("join", function (userId) {
         console.log("User ".concat(userId, " joined with socket id ").concat(socket.id));
         users.push({ userId: userId, socketId: socket.id });
     });
+    var socketToUser = {}; // Maps socketId to userId
+    var userToSocket = {}; // Maps userId to socketId
+    io.on("connection", function (socket) {
+        socket.on("register", function (userId) {
+            console.log("User ".concat(userId, " registered with socket id ").concat(socket.id));
+            userSocketMap.set(userId.toString(), socket.id);
+        });
+    });
     socket.on("sendMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
-        var from, to, message, newMessage, recipient, error_1;
+        var from, to, message, newMessage, recipientSocketId, error_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -217,27 +225,22 @@ io.on("connection", function (socket) {
                     _a.label = 1;
                 case 1:
                     _a.trys.push([1, 3, , 4]);
-                    newMessage = new Message({
-                        from: from,
-                        to: to,
-                        content: message,
-                    });
+                    newMessage = new Message({ from: from, to: to, content: message });
                     return [4 /*yield*/, newMessage.save()];
                 case 2:
                     _a.sent();
                     console.log("Message saved to database:", newMessage);
-                    recipient = users.find(function (user) { return user.userId === to; });
-                    if (recipient) {
-                        // Emit only after saving the message
-                        io.to(recipient.socketId).emit("receiveMessage", newMessage);
+                    recipientSocketId = userSocketMap.get(to);
+                    if (recipientSocketId) {
+                        io.to(recipientSocketId).emit("receiveMessage", newMessage); // Consistent event name
                     }
                     else {
-                        console.log("Recipient with ID ".concat(to, " not found"));
+                        console.log("Recipient with ID ".concat(to, " not found in map"));
                     }
                     return [3 /*break*/, 4];
                 case 3:
                     error_1 = _a.sent();
-                    console.error("Error saving message:", error_1);
+                    console.error("Error saving/sending message:", error_1);
                     return [3 /*break*/, 4];
                 case 4: return [2 /*return*/];
             }
@@ -245,7 +248,12 @@ io.on("connection", function (socket) {
     }); });
     socket.on("disconnect", function () {
         console.log("User disconnected, socket id:", socket.id);
-        users = users.filter(function (user) { return user.socketId !== socket.id; });
+        userSocketMap.forEach(function (socketId, userId) {
+            if (socketId === socket.id) {
+                userSocketMap.delete(userId);
+                return;
+            }
+        });
     });
 });
 // Get Messages Between Two Users

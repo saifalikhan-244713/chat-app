@@ -30,28 +30,39 @@ const Home = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  
-  // Create the socket only once using a ref
+  const [socketConnected, setSocketConnected] = useState(false);
+
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    // Create socket connection only once
     socketRef.current = io("http://localhost:5000");
     const token = localStorage.getItem("token");
+    socketRef.current.on("connect", () => {
+      console.log("Socket connected!");
+      setSocketConnected(true);
+      const token = localStorage.getItem("token");
+      const userId = localStorage.getItem("userId");
+      if (userId) {
+        console.log("Registering with userId:", userId);
+        socketRef.current?.emit("register", userId);
+      }
+    });
 
-    // Fetch logged-in user's name and userId
+    socketRef.current.on("disconnect", () => {
+      console.log("Socket disconnected!");
+      setSocketConnected(false);
+    });
+
     axios
       .get("http://localhost:5000/home", {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => {
         setName(res.data.name);
-        // Emit join with userId (assumed stored in localStorage after login)
         socketRef.current?.emit("join", res.data.userId);
       })
       .catch((err) => console.log("Error fetching user info:", err));
 
-    // Fetch all users except logged-in user
     axios
       .get("http://localhost:5000/api/users", {
         headers: { Authorization: `Bearer ${token}` },
@@ -61,17 +72,16 @@ const Home = () => {
       })
       .catch((err) => console.log("Error fetching users:", err));
 
-    // Listen for incoming messages
     socketRef.current?.on("receiveMessage", (incomingMessage: ChatMessage) => {
       setMessages((prevMessages) => [...prevMessages, incomingMessage]);
     });
 
     return () => {
       socketRef.current?.disconnect();
+      setSocketConnected(false);
     };
-  }, []); // run once
+  }, []);
 
-  // When a user is selected, fetch the conversation from the backend
   useEffect(() => {
     if (selectedUser) {
       const token = localStorage.getItem("token");
@@ -87,22 +97,38 @@ const Home = () => {
   }, [selectedUser]);
 
   const handleSendMessage = () => {
-    if (message.trim() && selectedUser && socketRef.current) {
-      // Send message using the userId stored in localStorage
-      socketRef.current.emit("sendMessage", {
+    if (
+      message.trim() &&
+      selectedUser &&
+      socketRef.current &&
+      socketConnected
+    ) {
+      console.log("Emitting sendMessage event:", {
         from: localStorage.getItem("userId"),
         to: selectedUser._id,
         message,
       });
-      // Optionally, update UI optimistically
+      console.log(
+        "Sending message with from:",
+        localStorage.getItem("userId"),
+        "and to:",
+        selectedUser._id
+      );
+      socketRef.current.emit("sendMessage", {
+        // Correct event name
+        from: localStorage.getItem("userId"),
+        to: selectedUser._id,
+        message,
+      });
       setMessages((prevMessages) => [
         ...prevMessages,
-        { content: message, from: name, to: selectedUser.name },
+        { content: message, from: name, to: selectedUser.name }, // Optimistic update
       ]);
       setMessage("");
+    } else {
+      console.log("Conditions not met for sending message");
     }
   };
-
   const handleSelectUser = (user: User) => {
     setSelectedUser(user);
   };
