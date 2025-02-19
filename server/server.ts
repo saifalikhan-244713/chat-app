@@ -61,7 +61,8 @@ const User = mongoose.model<IUser>("User", userSchema);
 const messageSchema = new mongoose.Schema(
   {
     from: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    to: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    to: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    group: { type: mongoose.Schema.Types.ObjectId, ref: "Group" }, // For group messages
     content: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
   },
@@ -69,6 +70,22 @@ const messageSchema = new mongoose.Schema(
 );
 
 const Message = mongoose.model("Message", messageSchema);
+
+const groupSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    groupId: { type: String, unique: true, required: true },
+    members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
+
+const Group = mongoose.model("Group", groupSchema);
 
 app.post("/signup", async (req: Request, res: Response) => {
   const {
@@ -115,6 +132,78 @@ app.post("/login", async (req: Request, res: Response) => {
     return res.status(200).json({ token, name: user.name, userId: user._id });
   } catch (err) {
     console.error(err);
+  }
+});
+app.get("/api/groups", async (req: Request, res: Response) => {
+  try {
+    const groups = await Group.find().populate("members", "name");
+    res.status(200).json(groups);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching groups", error });
+  }
+});
+
+app.post("/api/groups", async (req: Request, res: Response) => {
+  console.log("req.body 1:", req.body);
+  const { name, members, createdBy } = req.body;
+  console.log("req.body:", req.body);
+  if (!name || !members || members.length < 2) {
+    return res
+      .status(400)
+      .json({ message: "A group must have at least two members." });
+  }
+
+  const groupId = new mongoose.Types.ObjectId(); // Unique ID for the group
+  console.log("groupId:", groupId);
+  try {
+    const newGroup = new Group({ name, groupId, members, createdBy });
+    console.log("newGroup:", newGroup);
+    await newGroup.save();
+    console.log("New group created:", newGroup);
+    // const groupSchema = new mongoose.Schema(
+    //   {
+    //     name: { type: String, required: true },
+    //     groupId: { type: String, unique: true, required: true },
+    //     members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    //     createdBy: {
+    //       type: mongoose.Schema.Types.ObjectId,
+    //       ref: "User",
+    //       required: true,
+    //     },
+    //   },
+    //   { timestamps: true }
+    // );
+    res.status(201).json(newGroup);
+  } catch (error) {
+    res.status(500).json({ message: "Error creating group", error });
+  }
+});
+
+app.post("/api/messages/group", async (req: Request, res: Response) => {
+  const { from, group, message } = req.body;
+
+  try {
+    const newMessage = new Message({ from, group, content: message });
+    await newMessage.save();
+
+    io.to(group).emit("receiveGroupMessage", newMessage);
+    res.status(201).json(newMessage);
+  } catch (error) {
+    res.status(500).json({ message: "Error sending group message", error });
+  }
+});
+
+app.get("/api/messages/group/:groupId", async (req: Request, res: Response) => {
+  const { groupId } = req.params;
+
+  try {
+    const messages = await Message.find({ group: groupId })
+      .populate("from", "name")
+      .populate("group", "name");
+
+    res.status(200).json(messages);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching group messages", error });
   }
 });
 
@@ -191,6 +280,26 @@ io.on("connection", (socket: Socket) => {
       if (recipientSocketId) {
         io.to(recipientSocketId).emit("receiveMessage", populatedMessage);
       }
+
+      //FOR GROUP MESSAGES
+      socket.on("joinGroup", (groupId) => {
+        socket.join(groupId);
+        console.log(`User joined group: ${groupId}`);
+      });
+
+      // Sending a Message to a Group
+      socket.on("sendGroupMessage", async (data) => {
+        const { from, group, message } = data;
+
+        try {
+          const newMessage = new Message({ from, group, content: message });
+          await newMessage.save();
+
+          io.to(group).emit("receiveGroupMessage", newMessage);
+        } catch (error) {
+          console.error("Error sending group message:", error);
+        }
+      });
     } catch (error) {
       console.error("Error saving/sending message:", error);
     }
