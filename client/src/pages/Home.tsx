@@ -36,7 +36,6 @@ interface ChatMessage {
 }
 
 const Home = () => {
-  // const [name, setName] = useState("");
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -48,8 +47,9 @@ const Home = () => {
   const [newGroupMembers, setNewGroupMembers] = useState<string[]>([]);
 
   const socketRef = useRef<Socket | null>(null);
+
+  // Retrieve one-on-one messages when a user is selected
   useEffect(() => {
-    console.log("Selected user changed:", selectedUser); //called
     if (selectedUser) {
       const token = localStorage.getItem("token");
       axios
@@ -67,9 +67,34 @@ const Home = () => {
     }
   }, [selectedUser]);
 
+  // Retrieve group messages when a group is selected
+  useEffect(() => {
+    if (selectedGroup) {
+      const token = localStorage.getItem("token");
+      axios
+        .get(
+          `${import.meta.env.VITE_API_URL}/api/messages/group/${
+            selectedGroup._id
+          }`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        )
+        .then((res) => {
+          setMessages(res.data);
+          console.log("Fetched group messages:", res.data);
+        })
+        .catch((err) => console.log("Error fetching group messages:", err));
+    }
+    if (selectedGroup && socketRef.current) {
+      socketRef.current.emit("joinGroup", selectedGroup._id);
+    }
+  }, [selectedGroup]);
+
   useEffect(() => {
     socketRef.current = io(import.meta.env.VITE_APP_SOCKET_URL as string);
     const token = localStorage.getItem("token");
+
     socketRef.current.on("connect", () => {
       setSocketConnected(true);
       const userId = localStorage.getItem("userId");
@@ -117,6 +142,7 @@ const Home = () => {
 
   const sendMessage = () => {
     if (message.trim() && socketRef.current && socketConnected) {
+      // Sending a one-on-one message
       if (selectedUser) {
         socketRef.current.emit("sendMessage", {
           from: localStorage.getItem("userId"),
@@ -138,14 +164,38 @@ const Home = () => {
 
         setMessages((prevMessages) => [...prevMessages, tempMessage]);
         setMessage("");
-      } else if (selectedGroup) {
+      }
+      // Sending a group message
+      else if (selectedGroup) {
         socketRef.current.emit("sendGroupMessage", {
           from: localStorage.getItem("userId"),
           group: selectedGroup._id,
           message,
         });
+
+        // Save group message to the database using axios.post
+        const token = localStorage.getItem("token");
+        axios
+          .post(
+            `${import.meta.env.VITE_API_URL}/api/messages/group`,
+            {
+              from: localStorage.getItem("userId"),
+              to: null, // explicitly set to null for group messages
+              group: selectedGroup._id,
+              content: message,
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          )
+          .then((res) => {
+            console.log("Group message saved:", res.data);
+            // Optionally update the state if you're not waiting for the socket event:
+            // setMessages((prevMessages) => [...prevMessages, res.data]);
+          })
+          .catch((err) => console.error("Error saving group message:", err));
+        setMessage("");
       }
-      setMessage("");
     }
   };
 
@@ -153,9 +203,6 @@ const Home = () => {
     console.log("Creating group with:", newGroupName, newGroupMembers);
 
     const token = localStorage.getItem("token");
-    if (token) {
-      console.log("Token found");
-    }
     if (!token) {
       console.error("No token found");
       return;
@@ -163,8 +210,7 @@ const Home = () => {
 
     try {
       const decodedToken: any = jwtDecode(token);
-      console.log("Decoded Token:", decodedToken); // Check the token structure
-      const userId = decodedToken?.userId; // Use 'userId' as per backend
+      const userId = decodedToken?.userId;
       console.log("User ID:", userId);
 
       axios
@@ -180,20 +226,13 @@ const Home = () => {
           }
         )
         .then((res) => {
-          console.log("res.data", res.data);
-          console.log("res.data.members", res.data.members);
-          console.log("userId", userId);
-
-          // Ensure userId exists in members array
+          // Ensure the logged-in user is part of the group
           if (res.data.members.includes(userId)) {
-            console.log("user not to be added id", userId);
-            console.log("Users need to be added are:", res.data.members);
             setGroups((prevGroups) => [...prevGroups, res.data]);
-            console.log("User is a member, group added:", res.data);
+            console.log("Group added:", res.data);
           } else {
             console.log("User is NOT a member, group NOT added.");
           }
-
           setNewGroupName("");
           setNewGroupMembers([]);
         })
@@ -212,7 +251,10 @@ const Home = () => {
             <ListItem
               button
               key={user._id}
-              onClick={() => setSelectedUser(user)}
+              onClick={() => {
+                setSelectedUser(user);
+                setSelectedGroup(null); // clear group selection
+              }}
             >
               <ListItemText primary={user.name} />
             </ListItem>
@@ -226,7 +268,10 @@ const Home = () => {
             <ListItem
               button
               key={group._id}
-              onClick={() => setSelectedGroup(group)}
+              onClick={() => {
+                setSelectedGroup(group);
+                setSelectedUser(null); // clear user selection
+              }}
             >
               <ListItemText primary={group.name} />
             </ListItem>

@@ -78,8 +78,12 @@ var userSchema = new mongoose_1.default.Schema({
 var User = mongoose_1.default.model("User", userSchema);
 var messageSchema = new mongoose_1.default.Schema({
     from: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User", required: true },
-    to: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User" },
-    group: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Group" }, // For group mes/sages
+    to: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User", default: null },
+    group: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: "Group",
+        default: null,
+    },
     content: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
 }, { timestamps: true });
@@ -95,6 +99,10 @@ var groupSchema = new mongoose_1.default.Schema({
     },
 }, { timestamps: true });
 var Group = mongoose_1.default.model("Group", groupSchema);
+// ----------------------
+//       API Routes
+// ----------------------
+// Signup Endpoint
 app.post("/signup", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var _a, name, email, password, existingUser, hashedPassword, newUser, err_1;
     return __generator(this, function (_b) {
@@ -121,11 +129,13 @@ app.post("/signup", function (req, res) { return __awaiter(void 0, void 0, void 
             case 5:
                 err_1 = _b.sent();
                 console.error(err_1);
+                res.status(500).json({ message: "Server error", error: err_1 });
                 return [3 /*break*/, 6];
             case 6: return [2 /*return*/];
         }
     });
 }); });
+// Login Endpoint
 app.post("/login", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var _a, email, password, user, isMatch, token, err_2;
     return __generator(this, function (_b) {
@@ -152,11 +162,13 @@ app.post("/login", function (req, res) { return __awaiter(void 0, void 0, void 0
             case 4:
                 err_2 = _b.sent();
                 console.error(err_2);
+                res.status(500).json({ message: "Server error", error: err_2 });
                 return [3 /*break*/, 5];
             case 5: return [2 /*return*/];
         }
     });
 }); });
+// Get All Groups
 app.get("/api/groups", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var groups, error_1;
     return __generator(this, function (_a) {
@@ -176,6 +188,7 @@ app.get("/api/groups", function (req, res) { return __awaiter(void 0, void 0, vo
         }
     });
 }); });
+// Get Groups for a Specific User
 app.get("/api/groups/:userId", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var userId, groups, error_2;
     return __generator(this, function (_a) {
@@ -197,6 +210,7 @@ app.get("/api/groups/:userId", function (req, res) { return __awaiter(void 0, vo
         }
     });
 }); });
+// Create a Group
 app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var _a, name, members, createdBy, updatedMembers, groupId, newGroup, error_3;
     return __generator(this, function (_b) {
@@ -205,9 +219,7 @@ app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, v
                 _a = req.body, name = _a.name, members = _a.members, createdBy = _a.createdBy;
                 console.log("req.body:", req.body);
                 if (!name || !members || members.length < 2) {
-                    return [2 /*return*/, res
-                            .status(400)
-                            .json({ message: "A group must have at least two members." })];
+                    return [2 /*return*/, res.status(400).json({ message: "A group must have at least two members." })];
                 }
                 updatedMembers = members;
                 if (!members.includes(createdBy)) {
@@ -218,12 +230,7 @@ app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, v
                 _b.label = 1;
             case 1:
                 _b.trys.push([1, 3, , 4]);
-                newGroup = new Group({
-                    name: name,
-                    groupId: groupId,
-                    members: updatedMembers,
-                    createdBy: createdBy,
-                });
+                newGroup = new Group({ name: name, groupId: groupId, members: updatedMembers, createdBy: createdBy });
                 console.log("newGroup:", newGroup);
                 return [4 /*yield*/, newGroup.save()];
             case 2:
@@ -239,19 +246,24 @@ app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, v
         }
     });
 }); });
+// -------------------------------
+//   Group Messages API Endpoints
+// -------------------------------
+// Save Group Message (HTTP POST)
 app.post("/api/messages/group", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var _a, from, group, message, newMessage, error_4;
+    var _a, from, group, content, newMessage, error_4;
     return __generator(this, function (_b) {
         switch (_b.label) {
             case 0:
-                _a = req.body, from = _a.from, group = _a.group, message = _a.message;
+                _a = req.body, from = _a.from, group = _a.group, content = _a.content;
                 _b.label = 1;
             case 1:
                 _b.trys.push([1, 3, , 4]);
-                newMessage = new Message({ from: from, group: group, content: message });
+                newMessage = new Message({ from: from, group: group, content: content });
                 return [4 /*yield*/, newMessage.save()];
             case 2:
                 _b.sent();
+                // Emit the message to all sockets in the group room
                 io.to(group).emit("receiveGroupMessage", newMessage);
                 res.status(201).json(newMessage);
                 return [3 /*break*/, 4];
@@ -263,6 +275,7 @@ app.post("/api/messages/group", function (req, res) { return __awaiter(void 0, v
         }
     });
 }); });
+// Get Group Messages (HTTP GET)
 app.get("/api/messages/group/:groupId", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var groupId, messages, error_5;
     return __generator(this, function (_a) {
@@ -287,13 +300,16 @@ app.get("/api/messages/group/:groupId", function (req, res) { return __awaiter(v
         }
     });
 }); });
+// ----------------------
+//        Other APIs
+// ----------------------
+// Home Route (requires valid token)
 app.get("/home", function (req, res) {
     var _a;
     var token = (_a = req.headers.authorization) === null || _a === void 0 ? void 0 : _a.split(" ")[1];
     if (!token) {
         return res.status(403).json({ message: "No token provided" });
     }
-    var jwtSecret = process.env.JWT_SECRET;
     jwt.verify(token, jwtSecret, function (err, decoded) { return __awaiter(void 0, void 0, void 0, function () {
         var decodedPayload, user;
         return __generator(this, function (_a) {
@@ -306,16 +322,15 @@ app.get("/home", function (req, res) {
                     return [4 /*yield*/, User.findById(decodedPayload.userId).select("name")];
                 case 1:
                     user = _a.sent();
-                    res
-                        .status(200)
-                        .json({ message: "Welcome to the home page!", name: user.name });
+                    res.status(200).json({ message: "Welcome to the home page!", name: user.name });
                     return [2 /*return*/];
             }
         });
     }); });
 });
+// Get Users (excluding the logged-in user)
 app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var token, jwtSecret, decoded, userId, usersList, err_3;
+    var token, decoded, userId, usersList, err_3;
     var _a;
     return __generator(this, function (_b) {
         switch (_b.label) {
@@ -324,7 +339,6 @@ app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, voi
                 if (!token) {
                     return [2 /*return*/, res.status(403).json({ message: "No token provided" })];
                 }
-                jwtSecret = process.env.JWT_SECRET;
                 _b.label = 1;
             case 1:
                 _b.trys.push([1, 3, , 4]);
@@ -342,90 +356,7 @@ app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, voi
         }
     });
 }); });
-var userSocketMap = new Map();
-io.on("connection", function (socket) {
-    console.log("User connected, socket id:", socket.id);
-    socket.on("register", function (userId) {
-        console.log("User ".concat(userId, " registered with socket id ").concat(socket.id));
-        userSocketMap.set(userId.toString(), socket.id);
-    });
-    socket.on("join", function (userId) {
-        console.log("User ".concat(userId, " joined with socket id ").concat(socket.id));
-        users.push({ userId: userId, socketId: socket.id });
-    });
-    socket.on("sendMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
-        var from, to, message, newMessage, populatedMessage, recipientSocketId, error_6;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0:
-                    from = data.from, to = data.to, message = data.message;
-                    _a.label = 1;
-                case 1:
-                    _a.trys.push([1, 6, , 7]);
-                    newMessage = new Message({ from: from, to: to, content: message });
-                    return [4 /*yield*/, newMessage.save()];
-                case 2:
-                    _a.sent();
-                    return [4 /*yield*/, newMessage.save()];
-                case 3:
-                    populatedMessage = _a.sent();
-                    return [4 /*yield*/, populatedMessage.populate("from", "name")];
-                case 4:
-                    _a.sent();
-                    return [4 /*yield*/, populatedMessage.populate("to", "name")];
-                case 5:
-                    _a.sent();
-                    recipientSocketId = userSocketMap.get(to);
-                    if (recipientSocketId) {
-                        io.to(recipientSocketId).emit("receiveMessage", populatedMessage);
-                    }
-                    //FOR GROUP MESSAGES
-                    socket.on("joinGroup", function (groupId) {
-                        socket.join(groupId);
-                        console.log("User joined group: ".concat(groupId));
-                    });
-                    // Sending a Message to a Group
-                    socket.on("sendGroupMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
-                        var from, group, message, newMessage_1, error_7;
-                        return __generator(this, function (_a) {
-                            switch (_a.label) {
-                                case 0:
-                                    from = data.from, group = data.group, message = data.message;
-                                    _a.label = 1;
-                                case 1:
-                                    _a.trys.push([1, 3, , 4]);
-                                    newMessage_1 = new Message({ from: from, group: group, content: message });
-                                    return [4 /*yield*/, newMessage_1.save()];
-                                case 2:
-                                    _a.sent();
-                                    io.to(group).emit("receiveGroupMessage", newMessage_1);
-                                    return [3 /*break*/, 4];
-                                case 3:
-                                    error_7 = _a.sent();
-                                    console.error("Error sending group message:", error_7);
-                                    return [3 /*break*/, 4];
-                                case 4: return [2 /*return*/];
-                            }
-                        });
-                    }); });
-                    return [3 /*break*/, 7];
-                case 6:
-                    error_6 = _a.sent();
-                    console.error("Error saving/sending message:", error_6);
-                    return [3 /*break*/, 7];
-                case 7: return [2 /*return*/];
-            }
-        });
-    }); });
-    socket.on("disconnect", function () {
-        userSocketMap.forEach(function (socketId, userId) {
-            if (socketId === socket.id) {
-                userSocketMap.delete(userId);
-                return;
-            }
-        });
-    });
-});
+// Get One-to-One Messages
 app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var token, decoded, userId, messages, err_4;
     var _a;
@@ -454,13 +385,98 @@ app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, 
                 return [3 /*break*/, 4];
             case 3:
                 err_4 = _b.sent();
-                return [2 /*return*/, res
-                        .status(500)
-                        .json({ message: "Error verifying token", error: err_4 })];
+                return [2 /*return*/, res.status(500).json({ message: "Error verifying token", error: err_4 })];
             case 4: return [2 /*return*/];
         }
     });
 }); });
+// ----------------------
+//      Socket.io Setup
+// ----------------------
+var userSocketMap = new Map();
+io.on("connection", function (socket) {
+    console.log("User connected, socket id:", socket.id);
+    // Register a user
+    socket.on("register", function (userId) {
+        console.log("User ".concat(userId, " registered with socket id ").concat(socket.id));
+        userSocketMap.set(userId.toString(), socket.id);
+    });
+    socket.on("join", function (userId) {
+        console.log("User ".concat(userId, " joined with socket id ").concat(socket.id));
+        users.push({ userId: userId, socketId: socket.id });
+    });
+    // One-to-One Message Event
+    socket.on("sendMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
+        var from, to, message, newMessage, recipientSocketId, error_6;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    from = data.from, to = data.to, message = data.message;
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 5, , 6]);
+                    newMessage = new Message({ from: from, to: to, content: message });
+                    return [4 /*yield*/, newMessage.save()];
+                case 2:
+                    _a.sent();
+                    return [4 /*yield*/, newMessage.populate("from", "name")];
+                case 3:
+                    _a.sent();
+                    return [4 /*yield*/, newMessage.populate("to", "name")];
+                case 4:
+                    _a.sent();
+                    recipientSocketId = userSocketMap.get(to);
+                    if (recipientSocketId) {
+                        io.to(recipientSocketId).emit("receiveMessage", newMessage);
+                    }
+                    return [3 /*break*/, 6];
+                case 5:
+                    error_6 = _a.sent();
+                    console.error("Error saving/sending message:", error_6);
+                    return [3 /*break*/, 6];
+                case 6: return [2 /*return*/];
+            }
+        });
+    }); });
+    // Join a Group Room
+    socket.on("joinGroup", function (groupId) {
+        socket.join(groupId);
+        console.log("User joined group: ".concat(groupId));
+    });
+    socket.on("sendGroupMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
+        var from, group, message, newMessage, error_7;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    from = data.from, group = data.group, message = data.message;
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 4, , 5]);
+                    newMessage = new Message({ from: from, group: group, content: message });
+                    return [4 /*yield*/, newMessage.save()];
+                case 2:
+                    _a.sent();
+                    return [4 /*yield*/, newMessage.populate("from", "name")];
+                case 3:
+                    _a.sent();
+                    io.to(group).emit("receiveGroupMessage", newMessage);
+                    return [3 /*break*/, 5];
+                case 4:
+                    error_7 = _a.sent();
+                    console.error("Error sending group message:", error_7);
+                    return [3 /*break*/, 5];
+                case 5: return [2 /*return*/];
+            }
+        });
+    }); });
+    socket.on("disconnect", function () {
+        userSocketMap.forEach(function (socketId, userId) {
+            if (socketId === socket.id) {
+                userSocketMap.delete(userId);
+            }
+        });
+    });
+});
 server.listen(PORT, function () {
     console.log("Server started on http://localhost:".concat(PORT));
 });

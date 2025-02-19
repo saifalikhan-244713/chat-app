@@ -28,10 +28,10 @@ app.use(
     credentials: true,
   })
 );
+
 let users: { userId: string; socketId: string }[] = [];
 
 const mongoUri = process.env.MONGODB_URI;
-
 if (!mongoUri) {
   throw new Error("MONGODB_URI is not defined in the environment variables.");
 }
@@ -61,8 +61,12 @@ const User = mongoose.model<IUser>("User", userSchema);
 const messageSchema = new mongoose.Schema(
   {
     from: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    to: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    group: { type: mongoose.Schema.Types.ObjectId, ref: "Group" }, // For group mes/sages
+    to: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    group: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Group",
+      default: null,
+    },
     content: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
   },
@@ -87,54 +91,49 @@ const groupSchema = new mongoose.Schema(
 
 const Group = mongoose.model("Group", groupSchema);
 
-app.post("/signup", async (req: Request, res: Response) => {
-  const {
-    name,
-    email,
-    password,
-  }: { name: string; email: string; password: string } = req.body;
+// ----------------------
+//       API Routes
+// ----------------------
 
+// Signup Endpoint
+app.post("/signup", async (req: Request, res: Response) => {
+  const { name, email, password }: { name: string; email: string; password: string } = req.body;
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: "User already exists" });
     }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({ name, email, password: hashedPassword });
     await newUser.save();
     return res.status(201).json({ message: "User registered successfully" });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: "Server error", error: err });
   }
 });
 
+// Login Endpoint
 app.post("/login", async (req: Request, res: Response) => {
   const { email, password }: { email: string; password: string } = req.body;
-
   try {
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
-
-    const token = jwt.sign(
-      { userId: user._id, name: user.name, email: user.email },
-      jwtSecret,
-      { expiresIn: "1h" }
-    );
-
+    const token = jwt.sign({ userId: user._id, name: user.name, email: user.email }, jwtSecret, { expiresIn: "1h" });
     return res.status(200).json({ token, name: user.name, userId: user._id });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: "Server error", error: err });
   }
 });
 
+// Get All Groups
 app.get("/api/groups", async (req: Request, res: Response) => {
   try {
     const groups = await Group.find().populate("members", "name");
@@ -143,14 +142,12 @@ app.get("/api/groups", async (req: Request, res: Response) => {
     res.status(500).json({ message: "Error fetching groups", error });
   }
 });
+
+// Get Groups for a Specific User
 app.get("/api/groups/:userId", async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    // Find groups where the 'members' array contains the given userId
-    const groups = await Group.find({ members: userId }).populate(
-      "members",
-      "name"
-    );
+    const groups = await Group.find({ members: userId }).populate("members", "name");
     res.status(200).json(groups);
   } catch (error) {
     console.error("Error fetching groups:", error);
@@ -158,30 +155,22 @@ app.get("/api/groups/:userId", async (req: Request, res: Response) => {
   }
 });
 
+// Create a Group
 app.post("/api/groups", async (req: Request, res: Response) => {
   const { name, members, createdBy } = req.body;
   console.log("req.body:", req.body);
   if (!name || !members || members.length < 2) {
-    return res
-      .status(400)
-      .json({ message: "A group must have at least two members." });
+    return res.status(400).json({ message: "A group must have at least two members." });
   }
-
   // Ensure the creator is in the members array.
   let updatedMembers = members;
   if (!members.includes(createdBy)) {
     updatedMembers.push(createdBy);
   }
-
   const groupId = new mongoose.Types.ObjectId(); // Unique ID for the group
   console.log("groupId:", groupId);
   try {
-    const newGroup = new Group({
-      name,
-      groupId,
-      members: updatedMembers,
-      createdBy,
-    });
+    const newGroup = new Group({ name, groupId, members: updatedMembers, createdBy });
     console.log("newGroup:", newGroup);
     await newGroup.save();
     console.log("New group created:", newGroup);
@@ -191,13 +180,17 @@ app.post("/api/groups", async (req: Request, res: Response) => {
   }
 });
 
+// -------------------------------
+//   Group Messages API Endpoints
+// -------------------------------
+
+// Save Group Message (HTTP POST)
 app.post("/api/messages/group", async (req: Request, res: Response) => {
-  const { from, group, message } = req.body;
-
+  const { from, group, content } = req.body; // using 'content' for the message text
   try {
-    const newMessage = new Message({ from, group, content: message });
+    const newMessage = new Message({ from, group, content });
     await newMessage.save();
-
+    // Emit the message to all sockets in the group room
     io.to(group).emit("receiveGroupMessage", newMessage);
     res.status(201).json(newMessage);
   } catch (error) {
@@ -205,69 +198,86 @@ app.post("/api/messages/group", async (req: Request, res: Response) => {
   }
 });
 
+// Get Group Messages (HTTP GET)
 app.get("/api/messages/group/:groupId", async (req: Request, res: Response) => {
   const { groupId } = req.params;
-
   try {
     const messages = await Message.find({ group: groupId })
       .populate("from", "name")
       .populate("group", "name");
-
     res.status(200).json(messages);
   } catch (error) {
     res.status(500).json({ message: "Error fetching group messages", error });
   }
 });
 
+// ----------------------
+//        Other APIs
+// ----------------------
+
+// Home Route (requires valid token)
 app.get("/home", (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
     return res.status(403).json({ message: "No token provided" });
   }
-
-  const jwtSecret = process.env.JWT_SECRET;
-
   jwt.verify(token, jwtSecret, async (err, decoded) => {
     if (err) {
       return res.status(403).json({ message: "Invalid or expired token" });
     }
-
     const decodedPayload = decoded as { userId: string };
-
     const user = await User.findById(decodedPayload.userId).select("name");
-
-    res
-      .status(200)
-      .json({ message: "Welcome to the home page!", name: user.name });
+    res.status(200).json({ message: "Welcome to the home page!", name: user.name });
   });
 });
 
+// Get Users (excluding the logged-in user)
 app.get("/api/users", async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
     return res.status(403).json({ message: "No token provided" });
   }
-
-  const jwtSecret = process.env.JWT_SECRET;
-
   try {
     const decoded = jwt.verify(token, jwtSecret) as unknown;
-
     const { userId } = decoded as { userId: string };
-
-    const usersList = await User.find({ _id: { $ne: userId } }).select(
-      "_id name"
-    );
+    const usersList = await User.find({ _id: { $ne: userId } }).select("_id name");
     res.status(200).json(usersList);
   } catch (err) {
     return res.status(403).json({ message: "Invalid or expired token" });
   }
 });
 
+// Get One-to-One Messages
+app.get("/api/messages/:userId", async (req: Request, res: Response) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as unknown;
+    const { userId } = decoded as { userId: string };
+    console.log("Decoded userId:", userId);
+    const messages = await Message.find({
+      $or: [
+        { from: userId, to: req.params.userId },
+        { to: userId, from: req.params.userId },
+      ],
+    })
+      .populate("from", "name")
+      .populate("to", "name");
+    console.log("Messages sent from server:", messages);
+    res.status(200).json(messages);
+  } catch (err) {
+    return res.status(500).json({ message: "Error verifying token", error: err });
+  }
+});
+
+// ----------------------
+//      Socket.io Setup
+// ----------------------
 const userSocketMap = new Map<string, string>();
+
 io.on("connection", (socket: Socket) => {
   console.log("User connected, socket id:", socket.id);
 
+  // Register a user
   socket.on("register", (userId: string) => {
     console.log(`User ${userId} registered with socket id ${socket.id}`);
     userSocketMap.set(userId.toString(), socket.id);
@@ -278,42 +288,38 @@ io.on("connection", (socket: Socket) => {
     users.push({ userId, socketId: socket.id });
   });
 
+  // One-to-One Message Event
   socket.on("sendMessage", async (data) => {
     const { from, to, message } = data;
     try {
       const newMessage = new Message({ from, to, content: message });
       await newMessage.save();
-
-      const populatedMessage = await newMessage.save();
-      await populatedMessage.populate("from", "name");
-      await populatedMessage.populate("to", "name");
-
+      await newMessage.populate("from", "name");
+      await newMessage.populate("to", "name");
       const recipientSocketId = userSocketMap.get(to);
       if (recipientSocketId) {
-        io.to(recipientSocketId).emit("receiveMessage", populatedMessage);
+        io.to(recipientSocketId).emit("receiveMessage", newMessage);
       }
-
-      //FOR GROUP MESSAGES
-      socket.on("joinGroup", (groupId) => {
-        socket.join(groupId);
-        console.log(`User joined group: ${groupId}`);
-      });
-
-      // Sending a Message to a Group
-      socket.on("sendGroupMessage", async (data) => {
-        const { from, group, message } = data;
-
-        try {
-          const newMessage = new Message({ from, group, content: message });
-          await newMessage.save();
-
-          io.to(group).emit("receiveGroupMessage", newMessage);
-        } catch (error) {
-          console.error("Error sending group message:", error);
-        }
-      });
     } catch (error) {
       console.error("Error saving/sending message:", error);
+    }
+  });
+
+  // Join a Group Room
+  socket.on("joinGroup", (groupId: string) => {
+    socket.join(groupId);
+    console.log(`User joined group: ${groupId}`);
+  });
+
+  socket.on("sendGroupMessage", async (data) => {
+    const { from, group, message } = data;
+    try {
+      const newMessage = new Message({ from, group, content: message });
+      await newMessage.save();
+      await newMessage.populate("from", "name");
+      io.to(group).emit("receiveGroupMessage", newMessage);
+    } catch (error) {
+      console.error("Error sending group message:", error);
     }
   });
 
@@ -321,37 +327,9 @@ io.on("connection", (socket: Socket) => {
     userSocketMap.forEach((socketId, userId) => {
       if (socketId === socket.id) {
         userSocketMap.delete(userId);
-        return;
       }
     });
   });
-});
-
-app.get("/api/messages/:userId", async (req: Request, res: Response) => {
-  const token = req.headers.authorization?.split(" ")[1];
-
-  try {
-    const decoded = jwt.verify(token, jwtSecret) as unknown;
-
-    const { userId } = decoded as { userId: string };
-    console.log("Decoded userId:", userId);
-
-    const messages = await Message.find({
-      $or: [
-        { from: userId, to: req.params.userId },
-        { to: userId, from: req.params.userId },
-      ],
-    })
-      .populate("from", "name")
-      .populate("to", "name");
-
-    console.log("Messages sent from server:", messages);
-    res.status(200).json(messages);
-  } catch (err) {
-    return res
-      .status(500)
-      .json({ message: "Error verifying token", error: err });
-  }
 });
 
 server.listen(PORT, () => {
