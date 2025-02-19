@@ -134,6 +134,7 @@ app.post("/login", async (req: Request, res: Response) => {
     console.error(err);
   }
 });
+
 app.get("/api/groups", async (req: Request, res: Response) => {
   try {
     const groups = await Group.find().populate("members", "name");
@@ -142,9 +143,22 @@ app.get("/api/groups", async (req: Request, res: Response) => {
     res.status(500).json({ message: "Error fetching groups", error });
   }
 });
+app.get("/api/groups/:userId", async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    // Find groups where the 'members' array contains the given userId
+    const groups = await Group.find({ members: userId }).populate(
+      "members",
+      "name"
+    );
+    res.status(200).json(groups);
+  } catch (error) {
+    console.error("Error fetching groups:", error);
+    res.status(500).json({ message: "Error fetching groups", error });
+  }
+});
 
 app.post("/api/groups", async (req: Request, res: Response) => {
-  console.log("req.body 1:", req.body);
   const { name, members, createdBy } = req.body;
   console.log("req.body:", req.body);
   if (!name || !members || members.length < 2) {
@@ -153,26 +167,24 @@ app.post("/api/groups", async (req: Request, res: Response) => {
       .json({ message: "A group must have at least two members." });
   }
 
+  // Ensure the creator is in the members array.
+  let updatedMembers = members;
+  if (!members.includes(createdBy)) {
+    updatedMembers.push(createdBy);
+  }
+
   const groupId = new mongoose.Types.ObjectId(); // Unique ID for the group
   console.log("groupId:", groupId);
   try {
-    const newGroup = new Group({ name, groupId, members, createdBy });
+    const newGroup = new Group({
+      name,
+      groupId,
+      members: updatedMembers,
+      createdBy,
+    });
     console.log("newGroup:", newGroup);
     await newGroup.save();
     console.log("New group created:", newGroup);
-    // const groupSchema = new mongoose.Schema(
-    //   {
-    //     name: { type: String, required: true },
-    //     groupId: { type: String, unique: true, required: true },
-    //     members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-    //     createdBy: {
-    //       type: mongoose.Schema.Types.ObjectId,
-    //       ref: "User",
-    //       required: true,
-    //     },
-    //   },
-    //   { timestamps: true }
-    // );
     res.status(201).json(newGroup);
   } catch (error) {
     res.status(500).json({ message: "Error creating group", error });

@@ -176,12 +176,32 @@ app.get("/api/groups", function (req, res) { return __awaiter(void 0, void 0, vo
         }
     });
 }); });
+app.get("/api/groups/:userId", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
+    var userId, groups, error_2;
+    return __generator(this, function (_a) {
+        switch (_a.label) {
+            case 0:
+                _a.trys.push([0, 2, , 3]);
+                userId = req.params.userId;
+                return [4 /*yield*/, Group.find({ members: userId }).populate("members", "name")];
+            case 1:
+                groups = _a.sent();
+                res.status(200).json(groups);
+                return [3 /*break*/, 3];
+            case 2:
+                error_2 = _a.sent();
+                console.error("Error fetching groups:", error_2);
+                res.status(500).json({ message: "Error fetching groups", error: error_2 });
+                return [3 /*break*/, 3];
+            case 3: return [2 /*return*/];
+        }
+    });
+}); });
 app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var _a, name, members, createdBy, groupId, newGroup, error_2;
+    var _a, name, members, createdBy, updatedMembers, groupId, newGroup, error_3;
     return __generator(this, function (_b) {
         switch (_b.label) {
             case 0:
-                console.log("req.body 1:", req.body);
                 _a = req.body, name = _a.name, members = _a.members, createdBy = _a.createdBy;
                 console.log("req.body:", req.body);
                 if (!name || !members || members.length < 2) {
@@ -189,42 +209,38 @@ app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, v
                             .status(400)
                             .json({ message: "A group must have at least two members." })];
                 }
+                updatedMembers = members;
+                if (!members.includes(createdBy)) {
+                    updatedMembers.push(createdBy);
+                }
                 groupId = new mongoose_1.default.Types.ObjectId();
                 console.log("groupId:", groupId);
                 _b.label = 1;
             case 1:
                 _b.trys.push([1, 3, , 4]);
-                newGroup = new Group({ name: name, groupId: groupId, members: members, createdBy: createdBy });
+                newGroup = new Group({
+                    name: name,
+                    groupId: groupId,
+                    members: updatedMembers,
+                    createdBy: createdBy,
+                });
                 console.log("newGroup:", newGroup);
                 return [4 /*yield*/, newGroup.save()];
             case 2:
                 _b.sent();
                 console.log("New group created:", newGroup);
-                // const groupSchema = new mongoose.Schema(
-                //   {
-                //     name: { type: String, required: true },
-                //     groupId: { type: String, unique: true, required: true },
-                //     members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-                //     createdBy: {
-                //       type: mongoose.Schema.Types.ObjectId,
-                //       ref: "User",
-                //       required: true,
-                //     },
-                //   },
-                //   { timestamps: true }
-                // );
                 res.status(201).json(newGroup);
                 return [3 /*break*/, 4];
             case 3:
-                error_2 = _b.sent();
-                res.status(500).json({ message: "Error creating group", error: error_2 });
+                error_3 = _b.sent();
+                res.status(500).json({ message: "Error creating group", error: error_3 });
                 return [3 /*break*/, 4];
             case 4: return [2 /*return*/];
         }
     });
 }); });
 app.post("/api/messages/group", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var _a, from, group, message, newMessage, error_3;
+    var _a, from, group, message, newMessage, error_4;
     return __generator(this, function (_b) {
         switch (_b.label) {
             case 0:
@@ -240,15 +256,15 @@ app.post("/api/messages/group", function (req, res) { return __awaiter(void 0, v
                 res.status(201).json(newMessage);
                 return [3 /*break*/, 4];
             case 3:
-                error_3 = _b.sent();
-                res.status(500).json({ message: "Error sending group message", error: error_3 });
+                error_4 = _b.sent();
+                res.status(500).json({ message: "Error sending group message", error: error_4 });
                 return [3 /*break*/, 4];
             case 4: return [2 /*return*/];
         }
     });
 }); });
 app.get("/api/messages/group/:groupId", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var groupId, messages, error_4;
+    var groupId, messages, error_5;
     return __generator(this, function (_a) {
         switch (_a.label) {
             case 0:
@@ -264,8 +280,8 @@ app.get("/api/messages/group/:groupId", function (req, res) { return __awaiter(v
                 res.status(200).json(messages);
                 return [3 /*break*/, 4];
             case 3:
-                error_4 = _a.sent();
-                res.status(500).json({ message: "Error fetching group messages", error: error_4 });
+                error_5 = _a.sent();
+                res.status(500).json({ message: "Error fetching group messages", error: error_5 });
                 return [3 /*break*/, 4];
             case 4: return [2 /*return*/];
         }
@@ -338,7 +354,7 @@ io.on("connection", function (socket) {
         users.push({ userId: userId, socketId: socket.id });
     });
     socket.on("sendMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
-        var from, to, message, newMessage, populatedMessage, recipientSocketId, error_5;
+        var from, to, message, newMessage, populatedMessage, recipientSocketId, error_6;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -370,7 +386,7 @@ io.on("connection", function (socket) {
                     });
                     // Sending a Message to a Group
                     socket.on("sendGroupMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
-                        var from, group, message, newMessage_1, error_6;
+                        var from, group, message, newMessage_1, error_7;
                         return __generator(this, function (_a) {
                             switch (_a.label) {
                                 case 0:
@@ -385,8 +401,8 @@ io.on("connection", function (socket) {
                                     io.to(group).emit("receiveGroupMessage", newMessage_1);
                                     return [3 /*break*/, 4];
                                 case 3:
-                                    error_6 = _a.sent();
-                                    console.error("Error sending group message:", error_6);
+                                    error_7 = _a.sent();
+                                    console.error("Error sending group message:", error_7);
                                     return [3 /*break*/, 4];
                                 case 4: return [2 /*return*/];
                             }
@@ -394,8 +410,8 @@ io.on("connection", function (socket) {
                     }); });
                     return [3 /*break*/, 7];
                 case 6:
-                    error_5 = _a.sent();
-                    console.error("Error saving/sending message:", error_5);
+                    error_6 = _a.sent();
+                    console.error("Error saving/sending message:", error_6);
                     return [3 /*break*/, 7];
                 case 7: return [2 /*return*/];
             }

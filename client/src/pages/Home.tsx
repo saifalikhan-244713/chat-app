@@ -84,11 +84,19 @@ const Home = () => {
       })
       .then((res) => setUsers(res.data));
 
+    const decodedToken: any = jwtDecode(token);
+    const userId = decodedToken?.userId;
+    console.log("Logged-in user ID:", userId);
+
     axios
-      .get(`${import.meta.env.VITE_API_URL}/api/groups`, {
+      .get(`${import.meta.env.VITE_API_URL}/api/groups/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      .then((res) => setGroups(res.data));
+      .then((res) => {
+        console.log("Fetched groups for user:", res.data);
+        setGroups(res.data);
+      })
+      .catch((err) => console.error("Error fetching groups:", err));
 
     socketRef.current?.on("receiveMessage", (incomingMessage: ChatMessage) => {
       setMessages((prevMessages) => [...prevMessages, incomingMessage]);
@@ -172,8 +180,20 @@ const Home = () => {
           }
         )
         .then((res) => {
-          setGroups([...groups, res.data]);
-          console.log("Group created successfully:", res.data);
+          console.log("res.data", res.data);
+          console.log("res.data.members", res.data.members);
+          console.log("userId", userId);
+
+          // Ensure userId exists in members array
+          if (res.data.members.includes(userId)) {
+            console.log("user not to be added id", userId);
+            console.log("Users need to be added are:", res.data.members);
+            setGroups((prevGroups) => [...prevGroups, res.data]);
+            console.log("User is a member, group added:", res.data);
+          } else {
+            console.log("User is NOT a member, group NOT added.");
+          }
+
           setNewGroupName("");
           setNewGroupMembers([]);
         })
