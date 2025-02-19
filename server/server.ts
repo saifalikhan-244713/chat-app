@@ -156,13 +156,14 @@ app.get("/api/groups/:userId", async (req: Request, res: Response) => {
 });
 
 // Create a Group
+// Create a Group
+// Create a Group
 app.post("/api/groups", async (req: Request, res: Response) => {
   const { name, members, createdBy } = req.body;
   console.log("req.body:", req.body);
   if (!name || !members || members.length < 2) {
     return res.status(400).json({ message: "A group must have at least two members." });
   }
-  // Ensure the creator is in the members array.
   let updatedMembers = members;
   if (!members.includes(createdBy)) {
     updatedMembers.push(createdBy);
@@ -175,23 +176,27 @@ app.post("/api/groups", async (req: Request, res: Response) => {
     await newGroup.save();
     console.log("New group created:", newGroup);
     res.status(201).json(newGroup);
+    // Emit "newGroup" event to every connected member
+    newGroup.members.forEach((memberId: any) => {
+      const socketId = userSocketMap.get(memberId.toString());
+      if (socketId) {
+        io.to(socketId).emit("newGroup", newGroup);
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: "Error creating group", error });
   }
 });
 
-// -------------------------------
-//   Group Messages API Endpoints
-// -------------------------------
 
-// Save Group Message (HTTP POST)
+
 app.post("/api/messages/group", async (req: Request, res: Response) => {
   const { from, group, content } = req.body; // using 'content' for the message text
   try {
     const newMessage = new Message({ from, group, content });
     await newMessage.save();
     // Emit the message to all sockets in the group room
-    io.to(group).emit("receiveGroupMessage", newMessage);
+    // io.to(group).emit("receiveGroupMessage", newMessage);
     res.status(201).json(newMessage);
   } catch (error) {
     res.status(500).json({ message: "Error sending group message", error });

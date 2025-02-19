@@ -211,8 +211,10 @@ app.get("/api/groups/:userId", function (req, res) { return __awaiter(void 0, vo
     });
 }); });
 // Create a Group
+// Create a Group
+// Create a Group
 app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
-    var _a, name, members, createdBy, updatedMembers, groupId, newGroup, error_3;
+    var _a, name, members, createdBy, updatedMembers, groupId, newGroup_1, error_3;
     return __generator(this, function (_b) {
         switch (_b.label) {
             case 0:
@@ -230,13 +232,20 @@ app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, v
                 _b.label = 1;
             case 1:
                 _b.trys.push([1, 3, , 4]);
-                newGroup = new Group({ name: name, groupId: groupId, members: updatedMembers, createdBy: createdBy });
-                console.log("newGroup:", newGroup);
-                return [4 /*yield*/, newGroup.save()];
+                newGroup_1 = new Group({ name: name, groupId: groupId, members: updatedMembers, createdBy: createdBy });
+                console.log("newGroup:", newGroup_1);
+                return [4 /*yield*/, newGroup_1.save()];
             case 2:
                 _b.sent();
-                console.log("New group created:", newGroup);
-                res.status(201).json(newGroup);
+                console.log("New group created:", newGroup_1);
+                res.status(201).json(newGroup_1);
+                // Emit "newGroup" event to every connected member
+                newGroup_1.members.forEach(function (memberId) {
+                    var socketId = userSocketMap.get(memberId.toString());
+                    if (socketId) {
+                        io.to(socketId).emit("newGroup", newGroup_1);
+                    }
+                });
                 return [3 /*break*/, 4];
             case 3:
                 error_3 = _b.sent();
@@ -246,10 +255,6 @@ app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, v
         }
     });
 }); });
-// -------------------------------
-//   Group Messages API Endpoints
-// -------------------------------
-// Save Group Message (HTTP POST)
 app.post("/api/messages/group", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var _a, from, group, content, newMessage, error_4;
     return __generator(this, function (_b) {
@@ -264,7 +269,7 @@ app.post("/api/messages/group", function (req, res) { return __awaiter(void 0, v
             case 2:
                 _b.sent();
                 // Emit the message to all sockets in the group room
-                io.to(group).emit("receiveGroupMessage", newMessage);
+                // io.to(group).emit("receiveGroupMessage", newMessage);
                 res.status(201).json(newMessage);
                 return [3 /*break*/, 4];
             case 3:

@@ -45,10 +45,10 @@ const Home = () => {
   const [socketConnected, setSocketConnected] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupMembers, setNewGroupMembers] = useState<string[]>([]);
+  const [loggedInUserName, setLoggedInUserName] = useState("");
 
   const socketRef = useRef<Socket | null>(null);
 
-  // Retrieve one-on-one messages when a user is selected
   useEffect(() => {
     if (selectedUser) {
       const token = localStorage.getItem("token");
@@ -67,7 +67,6 @@ const Home = () => {
     }
   }, [selectedUser]);
 
-  // Retrieve group messages when a group is selected
   useEffect(() => {
     if (selectedGroup) {
       const token = localStorage.getItem("token");
@@ -94,7 +93,10 @@ const Home = () => {
   useEffect(() => {
     socketRef.current = io(import.meta.env.VITE_APP_SOCKET_URL as string);
     const token = localStorage.getItem("token");
-
+    if (token) {
+      const decodedToken: any = jwtDecode(token);
+      setLoggedInUserName(decodedToken.name);
+    }
     socketRef.current.on("connect", () => {
       setSocketConnected(true);
       const userId = localStorage.getItem("userId");
@@ -133,8 +135,28 @@ const Home = () => {
         setMessages((prevMessages) => [...prevMessages, incomingMessage]);
       }
     );
+    const handleNewGroup = (group: Group) => {
+      const userId = localStorage.getItem("userId");
+      // Check if the logged-in user is a member of the group.
+      // If group.members is not populated with objects, compare using toString.
+      setGroups((prevGroups) => {
+        const alreadyAdded = prevGroups.some((g) => g._id === group._id);
+        const isMember = group.members.some(
+          (member: any) =>
+            member.toString() === userId ||
+            (member._id && member._id === userId)
+        );
+        if (!alreadyAdded && isMember) {
+          return [...prevGroups, group];
+        }
+        return prevGroups;
+      });
+    };
+
+    socketRef.current?.on("newGroup", handleNewGroup);
 
     return () => {
+      socketRef.current?.off("newGroup", handleNewGroup);
       socketRef.current?.disconnect();
       setSocketConnected(false);
     };
@@ -142,7 +164,6 @@ const Home = () => {
 
   const sendMessage = () => {
     if (message.trim() && socketRef.current && socketConnected) {
-      // Sending a one-on-one message
       if (selectedUser) {
         socketRef.current.emit("sendMessage", {
           from: localStorage.getItem("userId"),
@@ -155,45 +176,20 @@ const Home = () => {
           _id: localStorage.getItem("userId") || "",
           name: decodedToken?.name || "Unknown",
         };
-
         const tempMessage: ChatMessage = {
           content: message,
           from: fromUser,
           to: selectedUser,
         };
-
         setMessages((prevMessages) => [...prevMessages, tempMessage]);
         setMessage("");
-      }
-      // Sending a group message
-      else if (selectedGroup) {
+      } else if (selectedGroup) {
         socketRef.current.emit("sendGroupMessage", {
           from: localStorage.getItem("userId"),
           group: selectedGroup._id,
           message,
         });
-
-        // Save group message to the database using axios.post
-        const token = localStorage.getItem("token");
-        axios
-          .post(
-            `${import.meta.env.VITE_API_URL}/api/messages/group`,
-            {
-              from: localStorage.getItem("userId"),
-              to: null, // explicitly set to null for group messages
-              group: selectedGroup._id,
-              content: message,
-            },
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          )
-          .then((res) => {
-            console.log("Group message saved:", res.data);
-            // Optionally update the state if you're not waiting for the socket event:
-            // setMessages((prevMessages) => [...prevMessages, res.data]);
-          })
-          .catch((err) => console.error("Error saving group message:", err));
+        // Removed axios POST for group messages to avoid duplicate emission
         setMessage("");
       }
     }
@@ -201,18 +197,15 @@ const Home = () => {
 
   const createGroup = () => {
     console.log("Creating group with:", newGroupName, newGroupMembers);
-
     const token = localStorage.getItem("token");
     if (!token) {
       console.error("No token found");
       return;
     }
-
     try {
       const decodedToken: any = jwtDecode(token);
       const userId = decodedToken?.userId;
       console.log("User ID:", userId);
-
       axios
         .post(
           `${import.meta.env.VITE_API_URL}/api/groups`,
@@ -226,7 +219,6 @@ const Home = () => {
           }
         )
         .then((res) => {
-          // Ensure the logged-in user is part of the group
           if (res.data.members.includes(userId)) {
             setGroups((prevGroups) => [...prevGroups, res.data]);
             console.log("Group added:", res.data);
@@ -253,14 +245,13 @@ const Home = () => {
               key={user._id}
               onClick={() => {
                 setSelectedUser(user);
-                setSelectedGroup(null); // clear group selection
+                setSelectedGroup(null);
               }}
             >
               <ListItemText primary={user.name} />
             </ListItem>
           ))}
         </List>
-
         <Divider sx={{ marginY: 2 }} />
         <Typography variant="h6">Groups</Typography>
         <List>
@@ -270,14 +261,13 @@ const Home = () => {
               key={group._id}
               onClick={() => {
                 setSelectedGroup(group);
-                setSelectedUser(null); // clear user selection
+                setSelectedUser(null);
               }}
             >
               <ListItemText primary={group.name} />
             </ListItem>
           ))}
         </List>
-
         <Divider sx={{ marginY: 2 }} />
         <Typography variant="h6">Create Group</Typography>
         <TextField
@@ -307,10 +297,14 @@ const Home = () => {
           Create
         </Button>
       </Box>
-
       <Box sx={{ flex: 1, padding: "20px", borderLeft: "1px solid #ddd" }}>
+        <Typography variant="h5" sx={{ textAlign: "center", widt: "100vw" }}>
+          Welcome, {loggedInUserName}
+        </Typography>
+
         {selectedUser || selectedGroup ? (
           <>
+            {" "}
             <Typography variant="h5">
               {selectedUser?.name || selectedGroup?.name}
             </Typography>
@@ -353,9 +347,11 @@ const Home = () => {
             </Box>
           </>
         ) : (
-          <Typography variant="h6">
-            Select a user or group to start chatting
-          </Typography>
+          <>
+            {/* <Typography variant="h6">
+              Select a user or group to start chatting
+            </Typography> */}
+          </>
         )}
       </Box>
     </Container>
