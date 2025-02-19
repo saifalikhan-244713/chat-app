@@ -19,11 +19,11 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 5000;
-
+const url = process.env.URL;
 app.use(require("express").json());
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: url,
     methods: ["GET", "POST"],
     credentials: true,
   })
@@ -89,7 +89,6 @@ app.post("/signup", async (req: Request, res: Response) => {
     return res.status(201).json({ message: "User registered successfully" });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -107,10 +106,6 @@ app.post("/login", async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    if (!jwtSecret) {
-      throw new Error("JWT_SECRET is not defined");
-    }
-
     const token = jwt.sign(
       { userId: user._id, name: user.name, email: user.email },
       jwtSecret,
@@ -120,7 +115,6 @@ app.post("/login", async (req: Request, res: Response) => {
     return res.status(200).json({ token, name: user.name, userId: user._id });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -130,13 +124,7 @@ app.get("/home", (req: Request, res: Response) => {
     return res.status(403).json({ message: "No token provided" });
   }
 
-  // Ensure that JWT_SECRET is defined
   const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    return res
-      .status(500)
-      .json({ message: "JWT_SECRET not set in environment variables" });
-  }
 
   jwt.verify(token, jwtSecret, async (err, decoded) => {
     if (err) {
@@ -145,14 +133,7 @@ app.get("/home", (req: Request, res: Response) => {
 
     const decodedPayload = decoded as { userId: string };
 
-    if (!decodedPayload.userId) {
-      return res.status(400).json({ message: "Invalid token payload" });
-    }
-
     const user = await User.findById(decodedPayload.userId).select("name");
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
 
     res
       .status(200)
@@ -166,32 +147,17 @@ app.get("/api/users", async (req: Request, res: Response) => {
     return res.status(403).json({ message: "No token provided" });
   }
 
-  // Ensure that JWT_SECRET is defined
   const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    return res
-      .status(500)
-      .json({ message: "JWT_SECRET not set in environment variables" });
-  }
 
   try {
     const decoded = jwt.verify(token, jwtSecret) as unknown;
 
-    // Type narrowing for userId
-    if (
-      typeof decoded === "object" &&
-      decoded !== null &&
-      "userId" in decoded
-    ) {
-      const { userId } = decoded as { userId: string };
+    const { userId } = decoded as { userId: string };
 
-      const usersList = await User.find({ _id: { $ne: userId } }).select(
-        "_id name"
-      );
-      res.status(200).json(usersList);
-    } else {
-      return res.status(403).json({ message: "Invalid token payload" });
-    }
+    const usersList = await User.find({ _id: { $ne: userId } }).select(
+      "_id name"
+    );
+    res.status(200).json(usersList);
   } catch (err) {
     return res.status(403).json({ message: "Invalid or expired token" });
   }
@@ -201,16 +167,14 @@ const userSocketMap = new Map<string, string>();
 io.on("connection", (socket: Socket) => {
   console.log("User connected, socket id:", socket.id);
 
+  socket.on("register", (userId: string) => {
+    console.log(`User ${userId} registered with socket id ${socket.id}`);
+    userSocketMap.set(userId.toString(), socket.id);
+  });
+
   socket.on("join", (userId: string) => {
     console.log(`User ${userId} joined with socket id ${socket.id}`);
     users.push({ userId, socketId: socket.id });
-  });
-
-  io.on("connection", (socket) => {
-    socket.on("register", (userId: string) => {
-      console.log(`User ${userId} registered with socket id ${socket.id}`);
-      userSocketMap.set(userId.toString(), socket.id);
-    });
   });
 
   socket.on("sendMessage", async (data) => {
@@ -223,13 +187,9 @@ io.on("connection", (socket: Socket) => {
       await populatedMessage.populate("from", "name");
       await populatedMessage.populate("to", "name");
 
-      console.log("Message saved:", populatedMessage);
-
       const recipientSocketId = userSocketMap.get(to);
       if (recipientSocketId) {
         io.to(recipientSocketId).emit("receiveMessage", populatedMessage);
-      } else {
-        console.log(`Recipient ${to} not connected`);
       }
     } catch (error) {
       console.error("Error saving/sending message:", error);
@@ -237,7 +197,6 @@ io.on("connection", (socket: Socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected, socket id:", socket.id);
     userSocketMap.forEach((socketId, userId) => {
       if (socketId === socket.id) {
         userSocketMap.delete(userId);
@@ -248,53 +207,30 @@ io.on("connection", (socket: Socket) => {
 });
 
 app.get("/api/messages/:userId", async (req: Request, res: Response) => {
-  console.log("Fetching messages for user:", req.params.userId);
   const token = req.headers.authorization?.split(" ")[1];
-  if (!token) {
-    return res.status(403).json({ message: "No token provided" });
-  }
 
   try {
-    if (!jwtSecret) {
-      return res
-        .status(500)
-        .json({ message: "JWT_SECRET not set in environment variables" });
-    }
-
     const decoded = jwt.verify(token, jwtSecret) as unknown;
-    console.log("Decoded token:", decoded);
 
-    if (
-      typeof decoded === "object" &&
-      decoded !== null &&
-      "userId" in decoded
-    ) {
-      const { userId } = decoded as { userId: string };
-      console.log("Decoded userId:", userId);
+    const { userId } = decoded as { userId: string };
+    console.log("Decoded userId:", userId);
 
-      const messages = await Message.find({
-        $or: [
-          { from: userId, to: req.params.userId },
-          { to: userId, from: req.params.userId },
-        ],
-      })
-        .populate("from", "name")
-        .populate("to", "name");
+    const messages = await Message.find({
+      $or: [
+        { from: userId, to: req.params.userId },
+        { to: userId, from: req.params.userId },
+      ],
+    })
+      .populate("from", "name")
+      .populate("to", "name");
 
-      console.log("Messages sent from server:", messages);
-      res.status(200).json(messages);
-    } else {
-      return res.status(403).json({ message: "Invalid token" });
-    }
+    console.log("Messages sent from server:", messages);
+    res.status(200).json(messages);
   } catch (err) {
     return res
       .status(500)
       .json({ message: "Error verifying token", error: err });
   }
-});
-
-app.get("/", (req: Request, res: Response) => {
-  res.send("Server is running");
 });
 
 server.listen(PORT, () => {

@@ -53,9 +53,10 @@ var io = new socket_io_1.Server(server, {
     },
 });
 var PORT = process.env.PORT || 5000;
+var url = process.env.URL;
 app.use(require("express").json());
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: url,
     methods: ["GET", "POST"],
     credentials: true,
 }));
@@ -108,7 +109,7 @@ app.post("/signup", function (req, res) { return __awaiter(void 0, void 0, void 
             case 5:
                 err_1 = _b.sent();
                 console.error(err_1);
-                return [2 /*return*/, res.status(500).json({ message: "Server error" })];
+                return [3 /*break*/, 6];
             case 6: return [2 /*return*/];
         }
     });
@@ -134,15 +135,12 @@ app.post("/login", function (req, res) { return __awaiter(void 0, void 0, void 0
                 if (!isMatch) {
                     return [2 /*return*/, res.status(400).json({ message: "Invalid credentials" })];
                 }
-                if (!jwtSecret) {
-                    throw new Error("JWT_SECRET is not defined");
-                }
                 token = jwt.sign({ userId: user._id, name: user.name, email: user.email }, jwtSecret, { expiresIn: "1h" });
                 return [2 /*return*/, res.status(200).json({ token: token, name: user.name, userId: user._id })];
             case 4:
                 err_2 = _b.sent();
                 console.error(err_2);
-                return [2 /*return*/, res.status(500).json({ message: "Server error" })];
+                return [3 /*break*/, 5];
             case 5: return [2 /*return*/];
         }
     });
@@ -153,13 +151,7 @@ app.get("/home", function (req, res) {
     if (!token) {
         return res.status(403).json({ message: "No token provided" });
     }
-    // Ensure that JWT_SECRET is defined
     var jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-        return res
-            .status(500)
-            .json({ message: "JWT_SECRET not set in environment variables" });
-    }
     jwt.verify(token, jwtSecret, function (err, decoded) { return __awaiter(void 0, void 0, void 0, function () {
         var decodedPayload, user;
         return __generator(this, function (_a) {
@@ -169,15 +161,9 @@ app.get("/home", function (req, res) {
                         return [2 /*return*/, res.status(403).json({ message: "Invalid or expired token" })];
                     }
                     decodedPayload = decoded;
-                    if (!decodedPayload.userId) {
-                        return [2 /*return*/, res.status(400).json({ message: "Invalid token payload" })];
-                    }
                     return [4 /*yield*/, User.findById(decodedPayload.userId).select("name")];
                 case 1:
                     user = _a.sent();
-                    if (!user) {
-                        return [2 /*return*/, res.status(404).json({ message: "User not found" })];
-                    }
                     res
                         .status(200)
                         .json({ message: "Welcome to the home page!", name: user.name });
@@ -197,45 +183,33 @@ app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, voi
                     return [2 /*return*/, res.status(403).json({ message: "No token provided" })];
                 }
                 jwtSecret = process.env.JWT_SECRET;
-                if (!jwtSecret) {
-                    return [2 /*return*/, res
-                            .status(500)
-                            .json({ message: "JWT_SECRET not set in environment variables" })];
-                }
                 _b.label = 1;
             case 1:
-                _b.trys.push([1, 5, , 6]);
+                _b.trys.push([1, 3, , 4]);
                 decoded = jwt.verify(token, jwtSecret);
-                if (!(typeof decoded === "object" &&
-                    decoded !== null &&
-                    "userId" in decoded)) return [3 /*break*/, 3];
                 userId = decoded.userId;
                 return [4 /*yield*/, User.find({ _id: { $ne: userId } }).select("_id name")];
             case 2:
                 usersList = _b.sent();
                 res.status(200).json(usersList);
                 return [3 /*break*/, 4];
-            case 3: return [2 /*return*/, res.status(403).json({ message: "Invalid token payload" })];
-            case 4: return [3 /*break*/, 6];
-            case 5:
+            case 3:
                 err_3 = _b.sent();
                 return [2 /*return*/, res.status(403).json({ message: "Invalid or expired token" })];
-            case 6: return [2 /*return*/];
+            case 4: return [2 /*return*/];
         }
     });
 }); });
 var userSocketMap = new Map();
 io.on("connection", function (socket) {
     console.log("User connected, socket id:", socket.id);
+    socket.on("register", function (userId) {
+        console.log("User ".concat(userId, " registered with socket id ").concat(socket.id));
+        userSocketMap.set(userId.toString(), socket.id);
+    });
     socket.on("join", function (userId) {
         console.log("User ".concat(userId, " joined with socket id ").concat(socket.id));
         users.push({ userId: userId, socketId: socket.id });
-    });
-    io.on("connection", function (socket) {
-        socket.on("register", function (userId) {
-            console.log("User ".concat(userId, " registered with socket id ").concat(socket.id));
-            userSocketMap.set(userId.toString(), socket.id);
-        });
     });
     socket.on("sendMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
         var from, to, message, newMessage, populatedMessage, recipientSocketId, error_1;
@@ -259,13 +233,9 @@ io.on("connection", function (socket) {
                     return [4 /*yield*/, populatedMessage.populate("to", "name")];
                 case 5:
                     _a.sent();
-                    console.log("Message saved:", populatedMessage);
                     recipientSocketId = userSocketMap.get(to);
                     if (recipientSocketId) {
                         io.to(recipientSocketId).emit("receiveMessage", populatedMessage);
-                    }
-                    else {
-                        console.log("Recipient ".concat(to, " not connected"));
                     }
                     return [3 /*break*/, 7];
                 case 6:
@@ -277,7 +247,6 @@ io.on("connection", function (socket) {
         });
     }); });
     socket.on("disconnect", function () {
-        console.log("User disconnected, socket id:", socket.id);
         userSocketMap.forEach(function (socketId, userId) {
             if (socketId === socket.id) {
                 userSocketMap.delete(userId);
@@ -292,24 +261,11 @@ app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, 
     return __generator(this, function (_b) {
         switch (_b.label) {
             case 0:
-                console.log("Fetching messages for user:", req.params.userId);
                 token = (_a = req.headers.authorization) === null || _a === void 0 ? void 0 : _a.split(" ")[1];
-                if (!token) {
-                    return [2 /*return*/, res.status(403).json({ message: "No token provided" })];
-                }
                 _b.label = 1;
             case 1:
-                _b.trys.push([1, 5, , 6]);
-                if (!jwtSecret) {
-                    return [2 /*return*/, res
-                            .status(500)
-                            .json({ message: "JWT_SECRET not set in environment variables" })];
-                }
+                _b.trys.push([1, 3, , 4]);
                 decoded = jwt.verify(token, jwtSecret);
-                console.log("Decoded token:", decoded);
-                if (!(typeof decoded === "object" &&
-                    decoded !== null &&
-                    "userId" in decoded)) return [3 /*break*/, 3];
                 userId = decoded.userId;
                 console.log("Decoded userId:", userId);
                 return [4 /*yield*/, Message.find({
@@ -325,20 +281,15 @@ app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, 
                 console.log("Messages sent from server:", messages);
                 res.status(200).json(messages);
                 return [3 /*break*/, 4];
-            case 3: return [2 /*return*/, res.status(403).json({ message: "Invalid token" })];
-            case 4: return [3 /*break*/, 6];
-            case 5:
+            case 3:
                 err_4 = _b.sent();
                 return [2 /*return*/, res
                         .status(500)
                         .json({ message: "Error verifying token", error: err_4 })];
-            case 6: return [2 /*return*/];
+            case 4: return [2 /*return*/];
         }
     });
 }); });
-app.get("/", function (req, res) {
-    res.send("Server is running");
-});
 server.listen(PORT, function () {
     console.log("Server started on http://localhost:".concat(PORT));
 });
