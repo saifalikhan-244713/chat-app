@@ -62,7 +62,7 @@ const messageSchema = new mongoose.Schema(
   {
     from: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     to: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    group: { type: mongoose.Schema.Types.ObjectId, ref: "Group" }, // For group messages
+    group: { type: mongoose.Schema.Types.ObjectId, ref: "Group" }, // For group mes/sages
     content: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
   },

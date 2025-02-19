@@ -79,7 +79,7 @@ var User = mongoose_1.default.model("User", userSchema);
 var messageSchema = new mongoose_1.default.Schema({
     from: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User", required: true },
     to: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User" },
-    group: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Group" }, // For group messages
+    group: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Group" }, // For group mes/sages
     content: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
 }, { timestamps: true });

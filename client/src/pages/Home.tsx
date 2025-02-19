@@ -48,6 +48,24 @@ const Home = () => {
   const [newGroupMembers, setNewGroupMembers] = useState<string[]>([]);
 
   const socketRef = useRef<Socket | null>(null);
+  useEffect(() => {
+    console.log("Selected user changed:", selectedUser); //called
+    if (selectedUser) {
+      const token = localStorage.getItem("token");
+      axios
+        .get(
+          `${import.meta.env.VITE_API_URL}/api/messages/${selectedUser._id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        )
+        .then((res) => {
+          setMessages(res.data);
+          console.log("Fetched messages:", res.data);
+        })
+        .catch((err) => console.log("Error fetching messages:", err));
+    }
+  }, [selectedUser]);
 
   useEffect(() => {
     socketRef.current = io(import.meta.env.VITE_APP_SOCKET_URL as string);
@@ -97,6 +115,21 @@ const Home = () => {
           to: selectedUser._id,
           message,
         });
+        const token = localStorage.getItem("token");
+        const decodedToken: any = token ? jwtDecode(token) : null;
+        const fromUser: User = {
+          _id: localStorage.getItem("userId") || "",
+          name: decodedToken?.name || "Unknown",
+        };
+
+        const tempMessage: ChatMessage = {
+          content: message,
+          from: fromUser,
+          to: selectedUser,
+        };
+
+        setMessages((prevMessages) => [...prevMessages, tempMessage]);
+        setMessage("");
       } else if (selectedGroup) {
         socketRef.current.emit("sendGroupMessage", {
           from: localStorage.getItem("userId"),
