@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { io, Socket } from "socket.io-client";
+import SendIcon from "@mui/icons-material/Send";
+import bg from "../pages/chatbg.jpg";
 import {
   Container,
   Typography,
@@ -15,6 +17,8 @@ import {
   MenuItem,
 } from "@mui/material";
 import { jwtDecode } from "jwt-decode";
+import { useNavigate } from "react-router-dom";
+import { url } from "inspector";
 
 interface User {
   _id: string;
@@ -46,7 +50,7 @@ const Home = () => {
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupMembers, setNewGroupMembers] = useState<string[]>([]);
   const [loggedInUserName, setLoggedInUserName] = useState("");
-
+  const navigate = useNavigate();
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -235,8 +239,24 @@ const Home = () => {
   };
 
   return (
-    <Container maxWidth="lg" style={{ display: "flex", height: "100vh" }}>
-      <Box sx={{ width: "30%", padding: "10px", backgroundColor: "#f5f5f5" }}>
+    <Container
+      maxWidth="lg"
+      style={{
+        display: "flex",
+        height: "100vh",
+        width: "100vw",
+        maxHeight: "100vh",
+      }}
+    >
+      <Box
+        sx={{
+          maxHeight: "100vh",
+          width: "30%",
+          overflowY: "auto",
+          padding: "10px",
+          backgroundColor: "#f5f5f5",
+        }}
+      >
         <Typography variant="h6">Users</Typography>
         <List>
           {users.map((user) => (
@@ -297,24 +317,44 @@ const Home = () => {
           Create
         </Button>
       </Box>
-      <Box sx={{ flex: 1, padding: "20px", borderLeft: "1px solid #ddd" }}>
-        <Typography variant="h5" sx={{ textAlign: "center", widt: "100vw" }}>
-          Welcome, {loggedInUserName}
-        </Typography>
-
+      <Box sx={{ flex: 1, borderLeft: "1px solid #ddd" }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: "20px 10px",
+            backgroundColor: "#128C7E",
+            color: "white",
+          }}
+        >
+          <Typography variant="h5" sx={{ textAlign: "center", widt: "100vw" }}>
+            {loggedInUserName.charAt(0).toUpperCase() +
+              loggedInUserName.slice(1)}
+          </Typography>
+          <Button
+            variant="contained"
+            component="button"
+            sx={{ backgroundColor: "#f5f5f5", color: "#128C7E" }}
+            onClick={() => {
+              localStorage.removeItem("token");
+              localStorage.removeItem("userId");
+              navigate("/login");
+            }}
+          >
+            Logout
+          </Button>
+        </Box>
         {selectedUser || selectedGroup ? (
           <>
             {" "}
-            <Typography variant="h5">
-              {selectedUser?.name || selectedGroup?.name}
-            </Typography>
             <Box
               sx={{
                 flex: 1,
-                backgroundColor: "#f5f5f5",
+                backgroundImage: `url(${bg})`,
+
                 padding: "10px",
-                borderRadius: "8px",
-                minHeight: "300px",
+                borderRadius: "0",
+                minHeight: "74vh",
                 overflowY: "auto",
               }}
             >
@@ -322,27 +362,73 @@ const Home = () => {
                 <Box
                   key={index}
                   sx={{
-                    padding: "8px",
+                    position: "relative",
+                    marginLeft:
+                      msg.from._id === localStorage.getItem("userId")
+                        ? "auto"
+                        : "0",
+                    marginRight: "0",
+                    padding: "4px",
+                    paddingRight:
+                      msg.from._id === localStorage.getItem("userId")
+                        ? "10px"
+                        : "20px",
+                    paddingLeft:
+                      msg.from._id === localStorage.getItem("userId")
+                      ? "20px"
+                      : "10px",
                     borderRadius: "4px",
-                    backgroundColor: "#e0e0e0",
+                    width: "fit-content",
+                    backgroundColor:
+                      msg.from._id === localStorage.getItem("userId")
+                        ? "#cdffdd"
+                        : "white",
+                    color: "black",
                     marginBottom: "5px",
                   }}
                 >
-                  <Typography>
-                    {msg.from.name}: {msg.content}
-                  </Typography>
+                  <Typography>{msg.content}</Typography>
                 </Box>
               ))}
             </Box>
-            <Box sx={{ display: "flex", marginTop: "10px" }}>
+            <Box sx={{ display: "flex", alignItems: "center" }}>
               <TextField
                 fullWidth
-                label="Message"
+                label={
+                  <Typography>
+                    Chat with {selectedUser?.name || selectedGroup?.name}
+                  </Typography>
+                }
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 0,
+                  },
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderRight: 0,
+                  },
+                }}
               />
-              <Button variant="contained" onClick={sendMessage}>
-                Send
+
+              <Button
+                variant="contained"
+                sx={{
+                  boxShadow: 0,
+                  border: "1px solid rgb(197, 193, 193)",
+                  borderLeft: 0,
+                  backgroundColor: "white",
+                  borderRadius: 0,
+                  height: "55px",
+                }}
+                onClick={sendMessage}
+              >
+                <SendIcon
+                  sx={{
+                    fontSize: "30px",
+                    color: "#128C7E",
+                  }}
+                />
               </Button>
             </Box>
           </>
