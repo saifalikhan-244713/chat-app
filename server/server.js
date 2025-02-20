@@ -99,10 +99,6 @@ var groupSchema = new mongoose_1.default.Schema({
     },
 }, { timestamps: true });
 var Group = mongoose_1.default.model("Group", groupSchema);
-// ----------------------
-//       API Routes
-// ----------------------
-// Signup Endpoint
 app.post("/signup", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var _a, name, email, password, existingUser, hashedPassword, newUser, err_1;
     return __generator(this, function (_b) {
@@ -210,16 +206,12 @@ app.get("/api/groups/:userId", function (req, res) { return __awaiter(void 0, vo
         }
     });
 }); });
-// Create a Group
-// Create a Group
-// Create a Group
 app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var _a, name, members, createdBy, updatedMembers, groupId, newGroup_1, error_3;
     return __generator(this, function (_b) {
         switch (_b.label) {
             case 0:
                 _a = req.body, name = _a.name, members = _a.members, createdBy = _a.createdBy;
-                console.log("req.body:", req.body);
                 if (!name || !members || members.length < 2) {
                     return [2 /*return*/, res.status(400).json({ message: "A group must have at least two members." })];
                 }
@@ -239,7 +231,6 @@ app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, v
                 _b.sent();
                 console.log("New group created:", newGroup_1);
                 res.status(201).json(newGroup_1);
-                // Emit "newGroup" event to every connected member
                 newGroup_1.members.forEach(function (memberId) {
                     var socketId = userSocketMap.get(memberId.toString());
                     if (socketId) {
@@ -268,8 +259,6 @@ app.post("/api/messages/group", function (req, res) { return __awaiter(void 0, v
                 return [4 /*yield*/, newMessage.save()];
             case 2:
                 _b.sent();
-                // Emit the message to all sockets in the group room
-                // io.to(group).emit("receiveGroupMessage", newMessage);
                 res.status(201).json(newMessage);
                 return [3 /*break*/, 4];
             case 3:
@@ -280,7 +269,6 @@ app.post("/api/messages/group", function (req, res) { return __awaiter(void 0, v
         }
     });
 }); });
-// Get Group Messages (HTTP GET)
 app.get("/api/messages/group/:groupId", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var groupId, messages, error_5;
     return __generator(this, function (_a) {
@@ -305,10 +293,6 @@ app.get("/api/messages/group/:groupId", function (req, res) { return __awaiter(v
         }
     });
 }); });
-// ----------------------
-//        Other APIs
-// ----------------------
-// Home Route (requires valid token)
 app.get("/home", function (req, res) {
     var _a;
     var token = (_a = req.headers.authorization) === null || _a === void 0 ? void 0 : _a.split(" ")[1];
@@ -333,7 +317,6 @@ app.get("/home", function (req, res) {
         });
     }); });
 });
-// Get Users (excluding the logged-in user)
 app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var token, decoded, userId, usersList, err_3;
     var _a;
@@ -361,7 +344,6 @@ app.get("/api/users", function (req, res) { return __awaiter(void 0, void 0, voi
         }
     });
 }); });
-// Get One-to-One Messages
 app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var token, decoded, userId, messages, err_4;
     var _a;
@@ -395,13 +377,9 @@ app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, 
         }
     });
 }); });
-// ----------------------
-//      Socket.io Setup
-// ----------------------
 var userSocketMap = new Map();
 io.on("connection", function (socket) {
     console.log("User connected, socket id:", socket.id);
-    // Register a user
     socket.on("register", function (userId) {
         console.log("User ".concat(userId, " registered with socket id ").concat(socket.id));
         userSocketMap.set(userId.toString(), socket.id);
@@ -410,7 +388,6 @@ io.on("connection", function (socket) {
         console.log("User ".concat(userId, " joined with socket id ").concat(socket.id));
         users.push({ userId: userId, socketId: socket.id });
     });
-    // One-to-One Message Event
     socket.on("sendMessage", function (data) { return __awaiter(void 0, void 0, void 0, function () {
         var from, to, message, newMessage, recipientSocketId, error_6;
         return __generator(this, function (_a) {
@@ -443,7 +420,6 @@ io.on("connection", function (socket) {
             }
         });
     }); });
-    // Join a Group Room
     socket.on("joinGroup", function (groupId) {
         socket.join(groupId);
         console.log("User joined group: ".concat(groupId));

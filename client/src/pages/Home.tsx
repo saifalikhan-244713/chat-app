@@ -15,6 +15,8 @@ import {
   Divider,
   Select,
   MenuItem,
+  FormControl,
+  InputLabel,
 } from "@mui/material";
 import { jwtDecode } from "jwt-decode";
 import { useNavigate } from "react-router-dom";
@@ -255,10 +257,23 @@ const Home = () => {
           overflowY: "auto",
           padding: "10px",
           backgroundColor: "#f5f5f5",
+          borderRadius: "8px",
+          boxShadow: "0px 4px 10px rgba(0,0,0,0.1)",
         }}
       >
-        <Typography variant="h6">Users</Typography>
-        <List>
+        {/* Users Section */}
+        <Box
+          sx={{
+            backgroundColor: "#212121",
+            padding: "10px",
+            borderRadius: "4px",
+          }}
+        >
+          <Typography variant="h6" sx={{ color: "#fff", textAlign: "center" }}>
+            Users
+          </Typography>
+        </Box>
+        <List sx={{ marginTop: "10px" }}>
           {users.map((user) => (
             <ListItem
               button
@@ -267,14 +282,35 @@ const Home = () => {
                 setSelectedUser(user);
                 setSelectedGroup(null);
               }}
+              sx={{
+                backgroundColor: "#fff",
+                marginBottom: "5px",
+                borderRadius: "4px",
+                "&:hover": {
+                  backgroundColor: "#e0e0e0",
+                },
+              }}
             >
               <ListItemText primary={user.name} />
             </ListItem>
           ))}
         </List>
+
         <Divider sx={{ marginY: 2 }} />
-        <Typography variant="h6">Groups</Typography>
-        <List>
+
+        {/* Groups Section */}
+        <Box
+          sx={{
+            backgroundColor: "#212121",
+            padding: "10px",
+            borderRadius: "4px",
+          }}
+        >
+          <Typography variant="h6" sx={{ color: "#fff", textAlign: "center" }}>
+            Groups
+          </Typography>
+        </Box>
+        <List sx={{ marginTop: "10px" }}>
           {groups.map((group) => (
             <ListItem
               button
@@ -283,40 +319,69 @@ const Home = () => {
                 setSelectedGroup(group);
                 setSelectedUser(null);
               }}
+              sx={{
+                backgroundColor: "#fff",
+                marginBottom: "5px",
+                borderRadius: "4px",
+                "&:hover": {
+                  backgroundColor: "#e0e0e0",
+                },
+              }}
             >
               <ListItemText primary={group.name} />
             </ListItem>
           ))}
         </List>
+
         <Divider sx={{ marginY: 2 }} />
-        <Typography variant="h6">Create Group</Typography>
+
+        {/* Create Group Section */}
+        <Box
+          sx={{
+            backgroundColor: "#212121",
+            padding: "10px",
+            borderRadius: "4px",
+          }}
+        >
+          <Typography variant="h6" sx={{ color: "#fff", textAlign: "center" }}>
+            Create Group
+          </Typography>
+        </Box>
         <TextField
           label="Group Name"
           fullWidth
           value={newGroupName}
           onChange={(e) => setNewGroupName(e.target.value)}
+          sx={{ marginTop: 2 }}
         />
-        <Select
-          multiple
-          fullWidth
-          value={newGroupMembers}
-          onChange={(e) => setNewGroupMembers(e.target.value as string[])}
-        >
-          {users.map((user) => (
-            <MenuItem key={user._id} value={user._id}>
-              {user.name}
-            </MenuItem>
-          ))}
-        </Select>
+        <FormControl fullWidth sx={{ marginTop: 2 }}>
+          <InputLabel>Select Group Members</InputLabel>
+          <Select
+            multiple
+            value={newGroupMembers}
+            onChange={(e) => setNewGroupMembers(e.target.value as string[])}
+          >
+            {users.map((user) => (
+              <MenuItem key={user._id} value={user._id}>
+                {user.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
         <Button
           fullWidth
           variant="contained"
-          sx={{ marginTop: 2 }}
+          sx={{
+            marginTop: 2,
+            backgroundColor: "#212121",
+            "&:hover": { backgroundColor: "#333" },
+          }}
           onClick={createGroup}
         >
           Create
         </Button>
       </Box>
+
       <Box sx={{ flex: 1, borderLeft: "1px solid #ddd" }}>
         <Box
           sx={{
@@ -375,8 +440,8 @@ const Home = () => {
                         : "20px",
                     paddingLeft:
                       msg.from._id === localStorage.getItem("userId")
-                      ? "20px"
-                      : "10px",
+                        ? "20px"
+                        : "10px",
                     borderRadius: "4px",
                     width: "fit-content",
                     backgroundColor:

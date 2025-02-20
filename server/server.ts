@@ -91,11 +91,7 @@ const groupSchema = new mongoose.Schema(
 
 const Group = mongoose.model("Group", groupSchema);
 
-// ----------------------
-//       API Routes
-// ----------------------
 
-// Signup Endpoint
 app.post("/signup", async (req: Request, res: Response) => {
   const { name, email, password }: { name: string; email: string; password: string } = req.body;
   try {
@@ -155,12 +151,9 @@ app.get("/api/groups/:userId", async (req: Request, res: Response) => {
   }
 });
 
-// Create a Group
-// Create a Group
-// Create a Group
+
 app.post("/api/groups", async (req: Request, res: Response) => {
   const { name, members, createdBy } = req.body;
-  console.log("req.body:", req.body);
   if (!name || !members || members.length < 2) {
     return res.status(400).json({ message: "A group must have at least two members." });
   }
@@ -168,7 +161,7 @@ app.post("/api/groups", async (req: Request, res: Response) => {
   if (!members.includes(createdBy)) {
     updatedMembers.push(createdBy);
   }
-  const groupId = new mongoose.Types.ObjectId(); // Unique ID for the group
+  const groupId = new mongoose.Types.ObjectId(); 
   console.log("groupId:", groupId);
   try {
     const newGroup = new Group({ name, groupId, members: updatedMembers, createdBy });
@@ -176,7 +169,6 @@ app.post("/api/groups", async (req: Request, res: Response) => {
     await newGroup.save();
     console.log("New group created:", newGroup);
     res.status(201).json(newGroup);
-    // Emit "newGroup" event to every connected member
     newGroup.members.forEach((memberId: any) => {
       const socketId = userSocketMap.get(memberId.toString());
       if (socketId) {
@@ -191,19 +183,16 @@ app.post("/api/groups", async (req: Request, res: Response) => {
 
 
 app.post("/api/messages/group", async (req: Request, res: Response) => {
-  const { from, group, content } = req.body; // using 'content' for the message text
+  const { from, group, content } = req.body; 
   try {
     const newMessage = new Message({ from, group, content });
     await newMessage.save();
-    // Emit the message to all sockets in the group room
-    // io.to(group).emit("receiveGroupMessage", newMessage);
     res.status(201).json(newMessage);
   } catch (error) {
     res.status(500).json({ message: "Error sending group message", error });
   }
 });
 
-// Get Group Messages (HTTP GET)
 app.get("/api/messages/group/:groupId", async (req: Request, res: Response) => {
   const { groupId } = req.params;
   try {
@@ -216,11 +205,7 @@ app.get("/api/messages/group/:groupId", async (req: Request, res: Response) => {
   }
 });
 
-// ----------------------
-//        Other APIs
-// ----------------------
 
-// Home Route (requires valid token)
 app.get("/home", (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
@@ -236,7 +221,6 @@ app.get("/home", (req: Request, res: Response) => {
   });
 });
 
-// Get Users (excluding the logged-in user)
 app.get("/api/users", async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
@@ -252,7 +236,6 @@ app.get("/api/users", async (req: Request, res: Response) => {
   }
 });
 
-// Get One-to-One Messages
 app.get("/api/messages/:userId", async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(" ")[1];
   try {
@@ -274,15 +257,12 @@ app.get("/api/messages/:userId", async (req: Request, res: Response) => {
   }
 });
 
-// ----------------------
-//      Socket.io Setup
-// ----------------------
+
 const userSocketMap = new Map<string, string>();
 
 io.on("connection", (socket: Socket) => {
   console.log("User connected, socket id:", socket.id);
 
-  // Register a user
   socket.on("register", (userId: string) => {
     console.log(`User ${userId} registered with socket id ${socket.id}`);
     userSocketMap.set(userId.toString(), socket.id);
@@ -293,7 +273,6 @@ io.on("connection", (socket: Socket) => {
     users.push({ userId, socketId: socket.id });
   });
 
-  // One-to-One Message Event
   socket.on("sendMessage", async (data) => {
     const { from, to, message } = data;
     try {
@@ -310,7 +289,6 @@ io.on("connection", (socket: Socket) => {
     }
   });
 
-  // Join a Group Room
   socket.on("joinGroup", (groupId: string) => {
     socket.join(groupId);
     console.log(`User joined group: ${groupId}`);
