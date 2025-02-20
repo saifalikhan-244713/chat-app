@@ -275,15 +275,11 @@ const Home = () => {
         <List sx={{ marginTop: "10px" }}>
           {users.map((user) => (
             <ListItem
-              button
               key={user._id}
-              onClick={() => {
-                setSelectedUser(user);
-                setSelectedGroup(null);
-              }}
+              onClick={() => setSelectedUser(user)}
               sx={{
                 backgroundColor: "#fff",
-                marginBottom: "5px",
+                marginBottom: "8px",
                 borderRadius: "4px",
                 "&:hover": {
                   backgroundColor: "#e0e0e0",
@@ -312,7 +308,6 @@ const Home = () => {
         <List sx={{ marginTop: "10px" }}>
           {groups.map((group) => (
             <ListItem
-              button
               key={group._id}
               onClick={() => {
                 setSelectedGroup(group);
