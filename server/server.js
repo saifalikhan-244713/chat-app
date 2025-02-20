@@ -48,11 +48,11 @@ var app = require("express")();
 var server = http.createServer(app);
 var io = new socket_io_1.Server(server, {
     cors: {
-        origin: ["https://chat-app-henna-beta-55.vercel.app"], // Your frontend URL
+        origin: "*",
         methods: ["GET", "POST"],
     },
 });
-var PORT = process.env.PORT;
+var PORT = process.env.PORT || 5000;
 var url = process.env.URL;
 app.use(require("express").json());
 app.use(cors({
@@ -213,9 +213,7 @@ app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, v
             case 0:
                 _a = req.body, name = _a.name, members = _a.members, createdBy = _a.createdBy;
                 if (!name || !members || members.length < 2) {
-                    return [2 /*return*/, res
-                            .status(400)
-                            .json({ message: "A group must have at least two members." })];
+                    return [2 /*return*/, res.status(400).json({ message: "A group must have at least two members." })];
                 }
                 updatedMembers = members;
                 if (!members.includes(createdBy)) {
@@ -226,12 +224,7 @@ app.post("/api/groups", function (req, res) { return __awaiter(void 0, void 0, v
                 _b.label = 1;
             case 1:
                 _b.trys.push([1, 3, , 4]);
-                newGroup_1 = new Group({
-                    name: name,
-                    groupId: groupId,
-                    members: updatedMembers,
-                    createdBy: createdBy,
-                });
+                newGroup_1 = new Group({ name: name, groupId: groupId, members: updatedMembers, createdBy: createdBy });
                 console.log("newGroup:", newGroup_1);
                 return [4 /*yield*/, newGroup_1.save()];
             case 2:
@@ -318,9 +311,7 @@ app.get("/home", function (req, res) {
                     return [4 /*yield*/, User.findById(decodedPayload.userId).select("name")];
                 case 1:
                     user = _a.sent();
-                    res
-                        .status(200)
-                        .json({ message: "Welcome to the home page!", name: user.name });
+                    res.status(200).json({ message: "Welcome to the home page!", name: user.name });
                     return [2 /*return*/];
             }
         });
@@ -381,9 +372,7 @@ app.get("/api/messages/:userId", function (req, res) { return __awaiter(void 0, 
                 return [3 /*break*/, 4];
             case 3:
                 err_4 = _b.sent();
-                return [2 /*return*/, res
-                        .status(500)
-                        .json({ message: "Error verifying token", error: err_4 })];
+                return [2 /*return*/, res.status(500).json({ message: "Error verifying token", error: err_4 })];
             case 4: return [2 /*return*/];
         }
     });

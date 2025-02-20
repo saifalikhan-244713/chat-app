@@ -13,12 +13,12 @@ const app = require("express")();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["https://chat-app-henna-beta-55.vercel.app"], // Your frontend URL
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 5000;
 const url = process.env.URL;
 app.use(require("express").json());
 app.use(
@@ -91,12 +91,9 @@ const groupSchema = new mongoose.Schema(
 
 const Group = mongoose.model("Group", groupSchema);
 
+
 app.post("/signup", async (req: Request, res: Response) => {
-  const {
-    name,
-    email,
-    password,
-  }: { name: string; email: string; password: string } = req.body;
+  const { name, email, password }: { name: string; email: string; password: string } = req.body;
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -124,11 +121,7 @@ app.post("/login", async (req: Request, res: Response) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
-    const token = jwt.sign(
-      { userId: user._id, name: user.name, email: user.email },
-      jwtSecret,
-      { expiresIn: "1h" }
-    );
+    const token = jwt.sign({ userId: user._id, name: user.name, email: user.email }, jwtSecret, { expiresIn: "1h" });
     return res.status(200).json({ token, name: user.name, userId: user._id });
   } catch (err) {
     console.error(err);
@@ -150,10 +143,7 @@ app.get("/api/groups", async (req: Request, res: Response) => {
 app.get("/api/groups/:userId", async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const groups = await Group.find({ members: userId }).populate(
-      "members",
-      "name"
-    );
+    const groups = await Group.find({ members: userId }).populate("members", "name");
     res.status(200).json(groups);
   } catch (error) {
     console.error("Error fetching groups:", error);
@@ -161,26 +151,20 @@ app.get("/api/groups/:userId", async (req: Request, res: Response) => {
   }
 });
 
+
 app.post("/api/groups", async (req: Request, res: Response) => {
   const { name, members, createdBy } = req.body;
   if (!name || !members || members.length < 2) {
-    return res
-      .status(400)
-      .json({ message: "A group must have at least two members." });
+    return res.status(400).json({ message: "A group must have at least two members." });
   }
   let updatedMembers = members;
   if (!members.includes(createdBy)) {
     updatedMembers.push(createdBy);
   }
-  const groupId = new mongoose.Types.ObjectId();
+  const groupId = new mongoose.Types.ObjectId(); 
   console.log("groupId:", groupId);
   try {
-    const newGroup = new Group({
-      name,
-      groupId,
-      members: updatedMembers,
-      createdBy,
-    });
+    const newGroup = new Group({ name, groupId, members: updatedMembers, createdBy });
     console.log("newGroup:", newGroup);
     await newGroup.save();
     console.log("New group created:", newGroup);
@@ -196,8 +180,10 @@ app.post("/api/groups", async (req: Request, res: Response) => {
   }
 });
 
+
+
 app.post("/api/messages/group", async (req: Request, res: Response) => {
-  const { from, group, content } = req.body;
+  const { from, group, content } = req.body; 
   try {
     const newMessage = new Message({ from, group, content });
     await newMessage.save();
@@ -219,6 +205,7 @@ app.get("/api/messages/group/:groupId", async (req: Request, res: Response) => {
   }
 });
 
+
 app.get("/home", (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
@@ -230,9 +217,7 @@ app.get("/home", (req: Request, res: Response) => {
     }
     const decodedPayload = decoded as { userId: string };
     const user = await User.findById(decodedPayload.userId).select("name");
-    res
-      .status(200)
-      .json({ message: "Welcome to the home page!", name: user.name });
+    res.status(200).json({ message: "Welcome to the home page!", name: user.name });
   });
 });
 
@@ -244,9 +229,7 @@ app.get("/api/users", async (req: Request, res: Response) => {
   try {
     const decoded = jwt.verify(token, jwtSecret) as unknown;
     const { userId } = decoded as { userId: string };
-    const usersList = await User.find({ _id: { $ne: userId } }).select(
-      "_id name"
-    );
+    const usersList = await User.find({ _id: { $ne: userId } }).select("_id name");
     res.status(200).json(usersList);
   } catch (err) {
     return res.status(403).json({ message: "Invalid or expired token" });
@@ -270,11 +253,10 @@ app.get("/api/messages/:userId", async (req: Request, res: Response) => {
     console.log("Messages sent from server:", messages);
     res.status(200).json(messages);
   } catch (err) {
-    return res
-      .status(500)
-      .json({ message: "Error verifying token", error: err });
+    return res.status(500).json({ message: "Error verifying token", error: err });
   }
 });
+
 
 const userSocketMap = new Map<string, string>();
 
