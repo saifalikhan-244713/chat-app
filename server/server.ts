@@ -18,7 +18,7 @@ const io = new Server(server, {
   },
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 const url = process.env.URL;
 app.use(require("express").json());
 app.use(
@@ -179,8 +179,6 @@ app.post("/api/groups", async (req: Request, res: Response) => {
     res.status(500).json({ message: "Error creating group", error });
   }
 });
-
-
 
 app.post("/api/messages/group", async (req: Request, res: Response) => {
   const { from, group, content } = req.body; 

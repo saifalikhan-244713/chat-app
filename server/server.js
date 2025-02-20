@@ -52,7 +52,7 @@ var io = new socket_io_1.Server(server, {
         methods: ["GET", "POST"],
     },
 });
-var PORT = process.env.PORT || 5000;
+var PORT = process.env.PORT;
 var url = process.env.URL;
 app.use(require("express").json());
 app.use(cors({
