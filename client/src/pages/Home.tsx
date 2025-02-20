@@ -20,7 +20,6 @@ import {
 } from "@mui/material";
 import { jwtDecode } from "jwt-decode";
 import { useNavigate } from "react-router-dom";
-import { url } from "inspector";
 
 interface User {
   _id: string;
@@ -100,7 +99,7 @@ const Home = () => {
     socketRef.current = io(import.meta.env.VITE_APP_SOCKET_URL as string);
     const token = localStorage.getItem("token");
     if (token) {
-      const decodedToken: any = jwtDecode(token);
+      const decodedToken: any = token ? jwtDecode(token) : null;
       setLoggedInUserName(decodedToken.name);
     }
     socketRef.current.on("connect", () => {
@@ -117,8 +116,8 @@ const Home = () => {
       })
       .then((res) => setUsers(res.data));
 
-    const decodedToken: any = jwtDecode(token);
-    const userId = decodedToken?.userId;
+    const decodedToken: any = token ? jwtDecode(token) : null;
+    const userId = decodedToken?.userId || "";
     console.log("Logged-in user ID:", userId);
 
     axios
